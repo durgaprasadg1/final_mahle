@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { authAPI } from "../lib/api";
+import { toast } from "react-toastify";
 
 const AuthContext = createContext(null);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-    throw new Error("useAuth must be used within an AuthProvider");
+   console.log("useAuth must be used within an AuthProvider");
+   toast.error("Something went wrong");
   }
   return context;
 };
@@ -17,7 +19,6 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing token on mount
     const storedToken = localStorage.getItem("token");
     const storedUser = localStorage.getItem("user");
 

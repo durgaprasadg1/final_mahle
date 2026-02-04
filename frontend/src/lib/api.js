@@ -11,7 +11,6 @@ const api = axios.create({
   },
 });
 
-// Request interceptor to add token
 api.interceptors.request.use(
   (config) => {
     const token = localStorage.getItem("token");
@@ -25,19 +24,20 @@ api.interceptors.request.use(
   },
 );
 
-// Response interceptor to handle errors
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response) {
       const message = error.response.data?.message || "An error occurred";
+      const isLoginRequest = error.config?.url?.includes("/auth/login");
 
-      // Handle unauthorized errors
       if (error.response.status === 401) {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
-        window.location.href = "/login";
-        toast.error("Session expired. Please login again.");
+        if (!isLoginRequest) {
+          localStorage.removeItem("token");
+          localStorage.removeItem("user");
+          window.location.href = "/login";
+          toast.error("Session expired. Please login again.");
+        }
       } else if (error.response.status === 403) {
         toast.error(message);
       } else if (error.response.status >= 500) {

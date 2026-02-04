@@ -170,9 +170,7 @@ const AdminDashboard = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -215,7 +213,6 @@ const AdminDashboard = () => {
           </Card>
         </div>
 
-        {/* Users Table */}
         <Card>
           <CardHeader>
             <div className="flex justify-between items-center">
@@ -319,7 +316,6 @@ const AdminDashboard = () => {
         </Card>
       </main>
 
-      {/* Create User Modal */}
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent onClose={() => setShowCreateModal(false)}>
           <DialogHeader>
@@ -470,7 +466,6 @@ const AdminDashboard = () => {
         </DialogContent>
       </Dialog>
 
-      {/* User Details Modal */}
       <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
         <DialogContent onClose={() => setShowDetailsModal(false)}>
           <DialogHeader>

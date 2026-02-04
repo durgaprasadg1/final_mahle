@@ -29,6 +29,9 @@ const Login = () => {
       return;
     }
 
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
     setLoading(true);
     const result = await login({ email, password });
     setLoading(false);
