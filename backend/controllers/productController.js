@@ -14,7 +14,6 @@ class ProductController {
         specifications,
       } = req.body;
 
-      // Validation
       if (!name || !type) {
         return res.status(400).json({
           success: false,

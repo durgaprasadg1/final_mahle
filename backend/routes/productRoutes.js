@@ -4,9 +4,7 @@ import { authenticate, checkPermission } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// All routes require authentication
 router.use(authenticate);
-
 router.get("/types", ProductController.getProductTypes);
 router.get("/", ProductController.getAllProducts);
 router.get("/unit/:unitId", ProductController.getProductsByUnit);

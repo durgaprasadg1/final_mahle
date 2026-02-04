@@ -3,7 +3,6 @@ import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
 class AuthController {
-  // Login (both admin and user)
   static async login(req, res) {
     try {
       const { email, password } = req.body;

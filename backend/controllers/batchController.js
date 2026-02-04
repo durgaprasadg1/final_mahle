@@ -2,7 +2,6 @@ import Batch from "../models/Batch.js";
 import Product from "../models/Product.js";
 
 class BatchController {
-  // Create batch
   static async createBatch(req, res) {
     try {
       const {
@@ -15,7 +14,6 @@ class BatchController {
         notes,
       } = req.body;
 
-      // Validation
       if (
         !product_id ||
         !quantity_produced ||

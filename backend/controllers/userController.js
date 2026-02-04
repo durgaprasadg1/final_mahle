@@ -3,12 +3,10 @@ import User from "../models/User.js";
 import Unit from "../models/Unit.js";
 
 class UserController {
-  // Create new user (Admin only)
   static async createUser(req, res) {
     try {
       const { email, password, name, unit_id, permissions } = req.body;
 
-      // Validation
       if (!email || !password || !name || !unit_id) {
         return res.status(400).json({
           success: false,
@@ -23,7 +21,6 @@ class UserController {
         });
       }
 
-      // Check if email already exists
       const existingUser = await User.findByEmail(email);
       if (existingUser) {
         return res.status(409).json({
@@ -32,7 +29,6 @@ class UserController {
         });
       }
 
-      // Verify unit exists
       const unit = await Unit.findById(unit_id);
       if (!unit) {
         return res.status(404).json({
@@ -41,10 +37,8 @@ class UserController {
         });
       }
 
-      // Hash password
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Create user
       const userData = {
         email,
         password: hashedPassword,
@@ -79,7 +73,6 @@ class UserController {
     }
   }
 
-  // Get all users (Admin only)
   static async getAllUsers(req, res) {
     try {
       const { unit_id, role, status } = req.query;
@@ -91,7 +84,6 @@ class UserController {
 
       const users = await User.findAll(filters);
 
-      // Remove passwords
       users.forEach((user) => delete user.password);
 
       res.json({
@@ -109,7 +101,6 @@ class UserController {
     }
   }
 
-  // Get user by ID (Admin only)
   static async getUserById(req, res) {
     try {
       const { id } = req.params;
@@ -138,7 +129,6 @@ class UserController {
     }
   }
 
-  // Update user (Admin only)
   static async updateUser(req, res) {
     try {
       const { id } = req.params;
@@ -193,7 +183,6 @@ class UserController {
     }
   }
 
-  // Block/Unblock user (Admin only)
   static async toggleUserStatus(req, res) {
     try {
       const { id } = req.params;
@@ -239,7 +228,6 @@ class UserController {
     }
   }
 
-  // Delete user (Admin only)
   static async deleteUser(req, res) {
     try {
       const { id } = req.params;
@@ -275,7 +263,6 @@ class UserController {
     }
   }
 
-  // Get users by unit
   static async getUsersByUnit(req, res) {
     try {
       const { unitId } = req.params;

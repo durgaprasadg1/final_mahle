@@ -86,7 +86,7 @@ CREATE INDEX idx_batches_product ON batches(product_id);
 CREATE INDEX idx_batches_unit ON batches(unit_id);
 CREATE INDEX idx_batches_time ON batches(batch_start_time, batch_end_time);
 
--- Insert default units (5 manufacturing units)
+
 INSERT INTO units (name, code, description, location) VALUES
 ('Unit Alpha', 'U-ALPHA', 'Primary manufacturing unit for cooling systems', 'Building A - Floor 1'),
 ('Unit Beta', 'U-BETA', 'Radiator production and assembly unit', 'Building B - Floor 2'),
@@ -94,12 +94,10 @@ INSERT INTO units (name, code, description, location) VALUES
 ('Unit Delta', 'U-DELTA', 'Fuel tank production unit', 'Building D - Floor 3'),
 ('Unit Epsilon', 'U-EPSILON', 'Multi-purpose manufacturing unit', 'Building E - Floor 2');
 
--- Insert default admin user (password: admin123 - hashed with bcrypt)
--- Password hash for 'admin123': $2a$10$rJ7qYZ9QxXxqYZ9QxXxqYehKGZW3bZvKZW3bZvKZW3bZvKZW3bZvK
-INSERT INTO users (email, password, name, role, status, permissions) VALUES
-('admin@mahle.com', '$2a$10$rJ7qYZ9QxXxqYZ9QxXxqYehKGZW3bZvKZW3bZvKZW3bZvKZW3bZvK', 'System Administrator', 'admin', 'active', '{"create": true, "read": true, "update": true, "delete": true}');
 
--- Create updated_at trigger function
+INSERT INTO users (email, password, name, role, status, permissions) VALUES
+('admin@mahle.com', '$2a$10$K8zX6aJ3yYqX3X3X3X3X3.rJ/k8Kx8J8Kx8J8Kx8J8Kx8J8Kx8J8K', 'System Administrator', 'admin', 'active', '{"create": true, "read": true, "update": true, "delete": true}');
+
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -108,13 +106,11 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Apply updated_at triggers
 CREATE TRIGGER update_units_updated_at BEFORE UPDATE ON units FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_products_updated_at BEFORE UPDATE ON products FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_batches_updated_at BEFORE UPDATE ON batches FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
--- Sample data for testing (optional)
 COMMENT ON TABLE units IS 'Manufacturing units table';
 COMMENT ON TABLE users IS 'System users (admin and unit users)';
 COMMENT ON TABLE products IS 'Products manufactured in each unit';

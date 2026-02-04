@@ -1,7 +1,6 @@
 import Unit from "../models/Unit.js";
 
 class UnitController {
-  // Get all units
   static async getAllUnits(req, res) {
     try {
       const units = await Unit.findAll();
@@ -21,7 +20,6 @@ class UnitController {
     }
   }
 
-  // Get unit by ID
   static async getUnitById(req, res) {
     try {
       const { id } = req.params;
@@ -48,7 +46,6 @@ class UnitController {
     }
   }
 
-  // Create unit (Admin only)
   static async createUnit(req, res) {
     try {
       const { name, code, description, location } = req.body;
@@ -78,7 +75,6 @@ class UnitController {
     }
   }
 
-  // Update unit (Admin only)
   static async updateUnit(req, res) {
     try {
       const { id } = req.params;

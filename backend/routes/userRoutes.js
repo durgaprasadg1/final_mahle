@@ -4,9 +4,7 @@ import { authenticate, authorizeAdmin } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// All routes require authentication and admin role
 router.use(authenticate, authorizeAdmin);
-
 router.post("/", UserController.createUser);
 router.get("/", UserController.getAllUsers);
 router.get("/unit/:unitId", UserController.getUsersByUnit);

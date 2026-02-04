@@ -4,9 +4,7 @@ import { authenticate, checkPermission } from "../middleware/auth.js";
 
 const router = express.Router();
 
-// All routes require authentication
 router.use(authenticate);
-
 router.get("/", BatchController.getAllBatches);
 router.get("/unit/:unitId", BatchController.getBatchesByUnit);
 router.get("/unit/:unitId/statistics", BatchController.getBatchStatistics);

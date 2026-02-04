@@ -1,7 +1,6 @@
 import pool from "../config/database.js";
 
 class Batch {
-  // Create a new batch
   static async create(batchData) {
     const {
       batch_number,
@@ -42,7 +41,6 @@ class Batch {
     return result.rows[0];
   }
 
-  // Find batch by ID
   static async findById(id) {
     const query = `
       SELECT b.*, 
@@ -59,7 +57,6 @@ class Batch {
     return result.rows[0];
   }
 
-  // Get all batches with filters
   static async findAll(filters = {}) {
     let query = `
       SELECT b.*, 
@@ -118,7 +115,6 @@ class Batch {
     return result.rows;
   }
 
-  // Get batches by unit
   static async findByUnit(unitId, limit = 50) {
     const query = `
       SELECT b.*, 
@@ -135,7 +131,6 @@ class Batch {
     return result.rows;
   }
 
-  // Update batch
   static async update(id, updateData) {
     const fields = [];
     const values = [];
@@ -165,14 +160,12 @@ class Batch {
     return result.rows[0];
   }
 
-  // Delete batch
   static async delete(id) {
     const query = "DELETE FROM batches WHERE id = $1 RETURNING id";
     const result = await pool.query(query, [id]);
     return result.rows[0];
   }
 
-  // Get batch statistics for a unit
   static async getUnitStatistics(unitId, dateFrom, dateTo) {
     const query = `
       SELECT 
@@ -190,7 +183,6 @@ class Batch {
     return result.rows[0];
   }
 
-  // Generate batch number
   static async generateBatchNumber(unitId) {
     const query = `
       SELECT batch_number FROM batches 
@@ -210,7 +202,6 @@ class Batch {
         sequence = parseInt(lastBatch.split("-")[2]) + 1;
       }
     }
-
     return `U${unitId}-${today}-${sequence.toString().padStart(4, "0")}`;
   }
 }
