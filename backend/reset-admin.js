@@ -6,7 +6,6 @@ async function resetAdminPassword() {
   try {
     console.log("🔐 Generating bcrypt hash for password: admin123");
 
-    // Generate hash for "admin123"
     const password = "admin123";
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -14,7 +13,6 @@ async function resetAdminPassword() {
     console.log("");
     console.log("🔄 Updating admin user password in database...");
 
-    // Update admin user password
     const result = await pool.query(
       `UPDATE users 
        SET password = $1 
