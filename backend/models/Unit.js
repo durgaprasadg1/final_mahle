@@ -40,7 +40,6 @@ class Unit {
     return result.rows[0];
   }
 
-  // Create unit (if needed for future expansion)
   static async create(unitData) {
     const { name, code, description, location } = unitData;
     const query = `
@@ -53,7 +52,6 @@ class Unit {
     return result.rows[0];
   }
 
-  // Update unit
   static async update(id, updateData) {
     const fields = [];
     const values = [];
@@ -68,7 +66,8 @@ class Unit {
     });
 
     if (fields.length === 0) {
-      throw new Error("No fields to update");
+      console.log("No fields to update");
+      return ;
     }
 
     values.push(id);
