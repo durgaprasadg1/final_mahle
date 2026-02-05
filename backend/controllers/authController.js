@@ -40,10 +40,8 @@ class AuthController {
         });
       }
 
-      // Update last login
       await User.updateLastLogin(user.id);
 
-      // Generate JWT token
       const token = jwt.sign(
         {
           id: user.id,
@@ -55,7 +53,6 @@ class AuthController {
         { expiresIn: "24h" },
       );
 
-      // Remove password from response
       delete user.password;
 
       res.json({
