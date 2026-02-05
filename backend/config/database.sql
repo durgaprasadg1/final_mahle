@@ -1,7 +1,5 @@
--- Mahle Inventory Management System Database Schema
--- PostgreSQL Database
 
--- Drop existing tables if they exist
+
 DROP TABLE IF EXISTS batches CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
@@ -10,12 +8,10 @@ DROP TYPE IF EXISTS user_role;
 DROP TYPE IF EXISTS user_status;
 DROP TYPE IF EXISTS product_type;
 
--- Create ENUM types
 CREATE TYPE user_role AS ENUM ('admin', 'user');
 CREATE TYPE user_status AS ENUM ('active', 'blocked');
 CREATE TYPE product_type AS ENUM ('coolers', 'radiators', 'pumps', 'fuel_tanks', 'other');
 
--- Units Table (5 manufacturing units)
 CREATE TABLE units (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
@@ -58,7 +54,6 @@ CREATE TABLE products (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Batches Table (1-hour manufacturing batches)
 CREATE TABLE batches (
     id SERIAL PRIMARY KEY,
     batch_number VARCHAR(50) NOT NULL UNIQUE,
@@ -76,7 +71,6 @@ CREATE TABLE batches (
     CONSTRAINT batch_duration_check CHECK (batch_end_time > batch_start_time)
 );
 
--- Indexes for performance
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_unit ON users(unit_id);
 CREATE INDEX idx_users_role ON users(role);
