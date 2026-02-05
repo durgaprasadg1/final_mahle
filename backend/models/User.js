@@ -1,7 +1,6 @@
 import pool from "../config/database.js";
 
 class User {
-  // Create a new user
   static async create(userData) {
     const {
       email,

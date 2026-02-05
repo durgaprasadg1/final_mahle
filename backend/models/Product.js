@@ -1,7 +1,6 @@
 import pool from "../config/database.js";
-
+// bhai ye normal comment hai 
 class Product {
-  // Create a new product
   static async create(productData) {
     const {
       name,
@@ -90,7 +89,6 @@ class Product {
     return result.rows;
   }
 
-  // Get products by unit
   static async findByUnit(unitId) {
     const query = `
       SELECT p.*, users.name as created_by_name
@@ -103,7 +101,6 @@ class Product {
     return result.rows;
   }
 
-  // Update product
   static async update(id, updateData) {
     const fields = [];
     const values = [];
@@ -133,7 +130,6 @@ class Product {
     return result.rows[0];
   }
 
-  // Delete product
   static async delete(id) {
     const query = "DELETE FROM products WHERE id = $1 RETURNING id";
     const result = await pool.query(query, [id]);
