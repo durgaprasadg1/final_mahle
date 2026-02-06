@@ -1,5 +1,4 @@
 import pool from "../config/database.js";
-// bhai ye normal comment hai 
 class Product {
   static async create(productData) {
     const {
