@@ -39,7 +39,7 @@ import {
   Trash2,
   Calendar,
 } from "lucide-react";
-import { formatDate, formatProductType } from "../../lib/utils";
+import { formatDate, formatProductType, formatTime } from "../../lib/utils";
 
 const UserDashboard = () => {
   const { user, logout } = useAuth();
@@ -54,17 +54,24 @@ const UserDashboard = () => {
   const [productForm, setProductForm] = useState({
     name: "",
     type: "",
-    fractiles: 0,
-    cells: 0,
-    tiers: 0,
     description: "",
+    fractiles: [],
+    cells: [],
+    tiers: [],
+  });
+
+  const [componentInput, setComponentInput] = useState({
+    fractile: "",
+    cell: "",
+    tier: "",
   });
 
   const [batchForm, setBatchForm] = useState({
     product_id: "",
     quantity_produced: "",
-    batch_start_time: "",
-    batch_end_time: "",
+    start_time: "",
+    end_time: "",
+    shift: "morning",
     notes: "",
   });
 
@@ -76,7 +83,7 @@ const UserDashboard = () => {
 
   const fetchProducts = async () => {
     try {
-      const response = await productAPI.getAll();
+      const response = await productAPI.getAll({ with_components: true });
       setProducts(response.data.data);
     } catch (error) {
       toast.error("Failed to fetch products");
@@ -88,7 +95,26 @@ const UserDashboard = () => {
   const fetchBatches = async () => {
     try {
       const response = await batchAPI.getAll({ limit: 50 });
-      setBatches(response.data.data);
+      // Map backend batch fields (start_time/end_time are TIME strings)
+      const mapped = response.data.data.map((b) => {
+        // compute duration in minutes using today's date
+        let duration = 0;
+        try {
+          const today = new Date().toISOString().split("T")[0];
+          const start = new Date(`${today}T${b.start_time}`);
+          const end = new Date(`${today}T${b.end_time}`);
+          duration = Math.round((end - start) / 60000);
+        } catch (e) {
+          duration = 0;
+        }
+
+        return {
+          ...b,
+          duration_minutes: duration,
+        };
+      });
+
+      setBatches(mapped);
     } catch (error) {
       toast.error("Failed to fetch batches");
     }
@@ -103,20 +129,90 @@ const UserDashboard = () => {
     }
   };
 
+  const addFractile = () => {
+    if (componentInput.fractile.trim()) {
+      setProductForm({
+        ...productForm,
+        fractiles: [
+          ...productForm.fractiles,
+          { name: componentInput.fractile, count: 0 },
+        ],
+      });
+      setComponentInput({ ...componentInput, fractile: "" });
+    }
+  };
+
+  const addCell = () => {
+    if (componentInput.cell.trim()) {
+      setProductForm({
+        ...productForm,
+        cells: [
+          ...productForm.cells,
+          { name: componentInput.cell, count: 0 },
+        ],
+      });
+      setComponentInput({ ...componentInput, cell: "" });
+    }
+  };
+
+  const addTier = () => {
+    if (componentInput.tier.trim()) {
+      setProductForm({
+        ...productForm,
+        tiers: [
+          ...productForm.tiers,
+          { name: componentInput.tier, count: 0 },
+        ],
+      });
+      setComponentInput({ ...componentInput, tier: "" });
+    }
+  };
+
+  const removeFractile = (index) => {
+    setProductForm({
+      ...productForm,
+      fractiles: productForm.fractiles.filter((_, i) => i !== index),
+    });
+  };
+
+  const removeCell = (index) => {
+    setProductForm({
+      ...productForm,
+      cells: productForm.cells.filter((_, i) => i !== index),
+    });
+  };
+
+  const removeTier = (index) => {
+    setProductForm({
+      ...productForm,
+      tiers: productForm.tiers.filter((_, i) => i !== index),
+    });
+  };
+
   const handleCreateProduct = async (e) => {
     e.preventDefault();
     try {
-      await productAPI.create(productForm);
+      const payload = {
+        name: productForm.name,
+        type: productForm.type,
+        description: productForm.description,
+        fractiles: productForm.fractiles,
+        cells: productForm.cells,
+        tiers: productForm.tiers,
+      };
+
+      await productAPI.create(payload);
       toast.success("Product created successfully");
       setShowProductModal(false);
       setProductForm({
         name: "",
         type: "",
-        fractiles: 0,
-        cells: 0,
-        tiers: 0,
         description: "",
+        fractiles: [],
+        cells: [],
+        tiers: [],
       });
+      setComponentInput({ fractile: "", cell: "", tier: "" });
       fetchProducts();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to create product");
@@ -126,14 +222,31 @@ const UserDashboard = () => {
   const handleCreateBatch = async (e) => {
     e.preventDefault();
     try {
-      await batchAPI.create(batchForm);
+      // Backend expects TIME strings for start_time/end_time (HH:MM:SS format)
+      // Frontend time input provides HH:MM, so add seconds
+      const toTimeString = (timeValue) => {
+        if (!timeValue) return null;
+        return timeValue.length === 5 ? `${timeValue}:00` : timeValue;
+      };
+
+      const payload = {
+        product_id: parseInt(batchForm.product_id, 10),
+        quantity_produced: parseInt(batchForm.quantity_produced, 10),
+        start_time: toTimeString(batchForm.start_time),
+        end_time: toTimeString(batchForm.end_time),
+        shift: batchForm.shift || "morning",
+        notes: batchForm.notes,
+      };
+
+      await batchAPI.create(payload);
       toast.success("Batch created successfully");
       setShowBatchModal(false);
       setBatchForm({
         product_id: "",
         quantity_produced: "",
-        batch_start_time: "",
-        batch_end_time: "",
+        start_time: "",
+        end_time: "",
+        shift: "morning",
         notes: "",
       });
       fetchBatches();
@@ -160,16 +273,22 @@ const UserDashboard = () => {
     toast.info("Logged out successfully");
   };
 
-  // Set default dates for batch form
+  // Set default times for batch form (time-only, not datetime)
   useEffect(() => {
-    const now = new Date();
-    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    if (showBatchModal) {
+      const now = new Date();
+      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
-    setBatchForm((prev) => ({
-      ...prev,
-      batch_start_time: oneHourAgo.toISOString().slice(0, 16),
-      batch_end_time: now.toISOString().slice(0, 16),
-    }));
+      const formatTimeValue = (date) => {
+        return date.toTimeString().slice(0, 5); // HH:MM format
+      };
+
+      setBatchForm((prev) => ({
+        ...prev,
+        start_time: formatTimeValue(oneHourAgo),
+        end_time: formatTimeValue(now),
+      }));
+    }
   }, [showBatchModal]);
 
   return (
@@ -307,43 +426,55 @@ const UserDashboard = () => {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Type</TableHead>
-                      <TableHead>Fractiles</TableHead>
-                      <TableHead>Cells</TableHead>
-                      <TableHead>Tiers</TableHead>
+
+                      <TableHead>Components</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {products.map((product) => (
-                      <TableRow key={product.id}>
-                        <TableCell className="font-medium">
-                          {product.name}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {formatProductType(product.type)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{product.fractiles}</TableCell>
-                        <TableCell>{product.cells}</TableCell>
-                        <TableCell>{product.tiers}</TableCell>
-                        <TableCell>
-                          {new Date(product.created_at).toLocaleDateString()}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          {user?.permissions?.delete && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteProduct(product.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-red-600" />
-                            </Button>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {products.map((product) => {
+                      const totalComponents =
+                        (Array.isArray(product.fractiles)
+                          ? product.fractiles.length
+                          : 0) +
+                        (Array.isArray(product.cells) ? product.cells.length : 0) +
+                        (Array.isArray(product.tiers) ? product.tiers.length : 0);
+                      return (
+                        <TableRow key={product.id}>
+                          <TableCell className="font-medium">
+                            {product.name}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">
+                              {formatProductType(product.type)}
+                            </Badge>
+                          </TableCell>
+
+                          <TableCell>
+                            {totalComponents > 0 ? (
+                              <Badge variant="secondary">{totalComponents}</Badge>
+                            ) : (
+                              <span className="text-gray-400">None</span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {new Date(product.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {user?.permissions?.delete && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteProduct(product.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-600" />
+                              </Button>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
                 </Table>
               )}
@@ -392,9 +523,7 @@ const UserDashboard = () => {
                       <TableCell className="font-semibold">
                         {batch.quantity_produced}
                       </TableCell>
-                      <TableCell>
-                        {formatDate(batch.batch_start_time)}
-                      </TableCell>
+                      <TableCell>{formatTime(batch.start_time)}</TableCell>
                       <TableCell>{batch.duration_minutes} min</TableCell>
                       <TableCell>
                         <Badge variant="success">{batch.status}</Badge>
@@ -444,51 +573,122 @@ const UserDashboard = () => {
                 ))}
               </Select>
             </div>
-            <div className="grid grid-cols-3 gap-4">
+            {/* Components Section */}
+            <div className="space-y-4 border-t pt-4">
+              <Label className="text-base font-semibold">Components</Label>
+              
+              {/* Fractiles */}
               <div className="space-y-2">
-                <Label htmlFor="fractiles">Fractiles</Label>
-                <Input
-                  id="fractiles"
-                  type="number"
-                  min="0"
-                  value={productForm.fractiles}
-                  onChange={(e) =>
-                    setProductForm({
-                      ...productForm,
-                      fractiles: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
+                <Label htmlFor="fractile" className="text-sm">Fractiles</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="fractile"
+                    value={componentInput.fractile}
+                    onChange={(e) =>
+                      setComponentInput({
+                        ...componentInput,
+                        fractile: e.target.value,
+                      })
+                    }
+                    onKeyPress={(e) => e.key === "Enter" && addFractile()}
+                    placeholder="E.g., Fractile-A, Fractile-B"
+                  />
+                  <Button type="button" onClick={addFractile} variant="outline">
+                    Add
+                  </Button>
+                </div>
+                {productForm.fractiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {productForm.fractiles.map((f, idx) => (
+                      <Badge key={idx} variant="secondary">
+                        {f.name}
+                        <button
+                          type="button"
+                          onClick={() => removeFractile(idx)}
+                          className="ml-2 hover:text-red-500"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
+              
+              {/* Cells */}
               <div className="space-y-2">
-                <Label htmlFor="cells">Cells</Label>
-                <Input
-                  id="cells"
-                  type="number"
-                  min="0"
-                  value={productForm.cells}
-                  onChange={(e) =>
-                    setProductForm({
-                      ...productForm,
-                      cells: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
+                <Label htmlFor="cell" className="text-sm">Cells</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="cell"
+                    value={componentInput.cell}
+                    onChange={(e) =>
+                      setComponentInput({
+                        ...componentInput,
+                        cell: e.target.value,
+                      })
+                    }
+                    onKeyPress={(e) => e.key === "Enter" && addCell()}
+                    placeholder="E.g., Cell-Type-1, Cell-Type-2"
+                  />
+                  <Button type="button" onClick={addCell} variant="outline">
+                    Add
+                  </Button>
+                </div>
+                {productForm.cells.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {productForm.cells.map((c, idx) => (
+                      <Badge key={idx} variant="secondary">
+                        {c.name}
+                        <button
+                          type="button"
+                          onClick={() => removeCell(idx)}
+                          className="ml-2 hover:text-red-500"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
+              
+              {/* Tiers */}
               <div className="space-y-2">
-                <Label htmlFor="tiers">Tiers</Label>
-                <Input
-                  id="tiers"
-                  type="number"
-                  min="0"
-                  value={productForm.tiers}
-                  onChange={(e) =>
-                    setProductForm({
-                      ...productForm,
-                      tiers: parseInt(e.target.value) || 0,
-                    })
-                  }
-                />
+                <Label htmlFor="tier" className="text-sm">Tiers</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="tier"
+                    value={componentInput.tier}
+                    onChange={(e) =>
+                      setComponentInput({
+                        ...componentInput,
+                        tier: e.target.value,
+                      })
+                    }
+                    onKeyPress={(e) => e.key === "Enter" && addTier()}
+                    placeholder="E.g., Top-Tier, Middle-Tier, Bottom-Tier"
+                  />
+                  <Button type="button" onClick={addTier} variant="outline">
+                    Add
+                  </Button>
+                </div>
+                {productForm.tiers.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {productForm.tiers.map((t, idx) => (
+                      <Badge key={idx} variant="secondary">
+                        {t.name}
+                        <button
+                          type="button"
+                          onClick={() => removeTier(idx)}
+                          className="ml-2 hover:text-red-500"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
             <div className="space-y-2">
@@ -525,7 +725,7 @@ const UserDashboard = () => {
           <DialogHeader>
             <DialogTitle>Record Production Batch</DialogTitle>
           </DialogHeader>
-          <form onSubmit={handleCreateBatch} className="space-y-4 mt-4">
+              <form onSubmit={handleCreateBatch} className="space-y-4 mt-4">
             <div className="space-y-2">
               <Label htmlFor="batchProduct">Product *</Label>
               <Select
@@ -560,32 +760,45 @@ const UserDashboard = () => {
                 required
               />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="shift">Shift *</Label>
+              <Select
+                id="shift"
+                value={batchForm.shift || "morning"}
+                onChange={(e) => setBatchForm({ ...batchForm, shift: e.target.value })}
+                required
+              >
+                <option value="morning">Morning</option>
+                <option value="afternoon">Afternoon</option>
+                <option value="night">Night</option>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="startTime">Start Time *</Label>
+                <Label htmlFor="startTime">Start Time (HH:MM) *</Label>
                 <Input
                   id="startTime"
-                  type="datetime-local"
-                  value={batchForm.batch_start_time}
+                  type="time"
+                  value={batchForm.start_time}
                   onChange={(e) =>
                     setBatchForm({
                       ...batchForm,
-                      batch_start_time: e.target.value,
+                      start_time: e.target.value,
                     })
                   }
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="endTime">End Time *</Label>
+                <Label htmlFor="endTime">End Time (HH:MM) *</Label>
                 <Input
                   id="endTime"
-                  type="datetime-local"
-                  value={batchForm.batch_end_time}
+                  type="time"
+                  value={batchForm.end_time}
                   onChange={(e) =>
                     setBatchForm({
                       ...batchForm,
-                      batch_end_time: e.target.value,
+                      end_time: e.target.value,
                     })
                   }
                   required
