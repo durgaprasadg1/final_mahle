@@ -6,12 +6,12 @@ const Dialog = ({ open, onOpenChange, children }) => {
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center mt-10">
+      <div className="min-h-6 flex items-center  justify-center inset-0 z-50 ">
       <div
-        className="fixed inset-0 bg-black/50"
+        className=" inset-0 bg-black/50"
         onClick={() => onOpenChange(false)}
       />
-      <div className="relative z-50 w-full max-w-lg mx-4">{children}</div>
+        <div className="min-w-full ml-36" >{children}</div>
     </div>
   );
 };

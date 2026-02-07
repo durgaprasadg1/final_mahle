@@ -95,9 +95,7 @@ const UserDashboard = () => {
   const fetchBatches = async () => {
     try {
       const response = await batchAPI.getAll({ limit: 50 });
-      // Map backend batch fields (start_time/end_time are TIME strings)
       const mapped = response.data.data.map((b) => {
-        // compute duration in minutes using today's date
         let duration = 0;
         try {
           const today = new Date().toISOString().split("T")[0];
@@ -146,10 +144,7 @@ const UserDashboard = () => {
     if (componentInput.cell.trim()) {
       setProductForm({
         ...productForm,
-        cells: [
-          ...productForm.cells,
-          { name: componentInput.cell, count: 0 },
-        ],
+        cells: [...productForm.cells, { name: componentInput.cell, count: 0 }],
       });
       setComponentInput({ ...componentInput, cell: "" });
     }
@@ -159,10 +154,7 @@ const UserDashboard = () => {
     if (componentInput.tier.trim()) {
       setProductForm({
         ...productForm,
-        tiers: [
-          ...productForm.tiers,
-          { name: componentInput.tier, count: 0 },
-        ],
+        tiers: [...productForm.tiers, { name: componentInput.tier, count: 0 }],
       });
       setComponentInput({ ...componentInput, tier: "" });
     }
@@ -222,8 +214,6 @@ const UserDashboard = () => {
   const handleCreateBatch = async (e) => {
     e.preventDefault();
     try {
-      // Backend expects TIME strings for start_time/end_time (HH:MM:SS format)
-      // Frontend time input provides HH:MM, so add seconds
       const toTimeString = (timeValue) => {
         if (!timeValue) return null;
         return timeValue.length === 5 ? `${timeValue}:00` : timeValue;
@@ -273,7 +263,6 @@ const UserDashboard = () => {
     toast.info("Logged out successfully");
   };
 
-  // Set default times for batch form (time-only, not datetime)
   useEffect(() => {
     if (showBatchModal) {
       const now = new Date();
@@ -324,9 +313,7 @@ const UserDashboard = () => {
         </div>
       </header>
 
-      {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -426,7 +413,6 @@ const UserDashboard = () => {
                     <TableRow>
                       <TableHead>Name</TableHead>
                       <TableHead>Type</TableHead>
-
                       <TableHead>Components</TableHead>
                       <TableHead>Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
@@ -434,12 +420,18 @@ const UserDashboard = () => {
                   </TableHeader>
                   <TableBody>
                     {products.map((product) => {
+                      const fractiles = Array.isArray(product.fractiles)
+                        ? product.fractiles
+                        : [];
+                      const cells = Array.isArray(product.cells)
+                        ? product.cells
+                        : [];
+                      const tiers = Array.isArray(product.tiers)
+                        ? product.tiers
+                        : [];
                       const totalComponents =
-                        (Array.isArray(product.fractiles)
-                          ? product.fractiles.length
-                          : 0) +
-                        (Array.isArray(product.cells) ? product.cells.length : 0) +
-                        (Array.isArray(product.tiers) ? product.tiers.length : 0);
+                        fractiles.length + cells.length + tiers.length;
+
                       return (
                         <TableRow key={product.id}>
                           <TableCell className="font-medium">
@@ -450,12 +442,62 @@ const UserDashboard = () => {
                               {formatProductType(product.type)}
                             </Badge>
                           </TableCell>
-
                           <TableCell>
                             {totalComponents > 0 ? (
-                              <Badge variant="secondary">{totalComponents}</Badge>
+                              <div className="space-y-1">
+                                {fractiles.length > 0 && (
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <span className="text-xs font-semibold text-blue-600">
+                                      Fractiles:
+                                    </span>
+                                    {fractiles.map((f, idx) => (
+                                      <Badge
+                                        key={idx}
+                                        variant="secondary"
+                                        className="text-xs"
+                                      >
+                                        {f.name}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                                {cells.length > 0 && (
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <span className="text-xs font-semibold text-green-600">
+                                      Cells:
+                                    </span>
+                                    {cells.map((c, idx) => (
+                                      <Badge
+                                        key={idx}
+                                        variant="secondary"
+                                        className="text-xs"
+                                      >
+                                        {c.name}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                                {tiers.length > 0 && (
+                                  <div className="flex items-center gap-1 flex-wrap">
+                                    <span className="text-xs font-semibold text-purple-600">
+                                      Tiers:
+                                    </span>
+                                    {tiers.map((t, idx) => (
+                                      <Badge
+                                        key={idx}
+                                        variant="secondary"
+                                        className="text-xs"
+                                      >
+                                        {t.name}
+                                      </Badge>
+                                    ))}
+                                  </div>
+                                )}
+                              </div>
                             ) : (
-                              <span className="text-gray-400">None</span>
+                              <span className="text-gray-400">
+                                No components
+                              </span>
                             )}
                           </TableCell>
                           <TableCell>
@@ -538,297 +580,312 @@ const UserDashboard = () => {
       </main>
 
       {/* Create Product Modal */}
-      <Dialog open={showProductModal} onOpenChange={setShowProductModal}>
-        <DialogContent onClose={() => setShowProductModal(false)}>
-          <DialogHeader>
-            <DialogTitle>Add New Product</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleCreateProduct} className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label htmlFor="productName">Product Name *</Label>
-              <Input
-                id="productName"
-                value={productForm.name}
-                onChange={(e) =>
-                  setProductForm({ ...productForm, name: e.target.value })
-                }
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="productType">Product Type *</Label>
-              <Select
-                id="productType"
-                value={productForm.type}
-                onChange={(e) =>
-                  setProductForm({ ...productForm, type: e.target.value })
-                }
-                required
-              >
-                <option value="">Select Type</option>
-                {productTypes.map((type) => (
-                  <option key={type} value={type}>
-                    {formatProductType(type)}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            {/* Components Section */}
-            <div className="space-y-4 border-t pt-4">
-              <Label className="text-base font-semibold">Components</Label>
-              
-              {/* Fractiles */}
+      {activeTab === "products" && (
+        <Dialog open={showProductModal} onOpenChange={setShowProductModal}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add New Product</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCreateProduct} className="space-y-4 mt-4">
               <div className="space-y-2">
-                <Label htmlFor="fractile" className="text-sm">Fractiles</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="fractile"
-                    value={componentInput.fractile}
-                    onChange={(e) =>
-                      setComponentInput({
-                        ...componentInput,
-                        fractile: e.target.value,
-                      })
-                    }
-                    onKeyPress={(e) => e.key === "Enter" && addFractile()}
-                    placeholder="E.g., Fractile-A, Fractile-B"
-                  />
-                  <Button type="button" onClick={addFractile} variant="outline">
-                    Add
-                  </Button>
-                </div>
-                {productForm.fractiles.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {productForm.fractiles.map((f, idx) => (
-                      <Badge key={idx} variant="secondary">
-                        {f.name}
-                        <button
-                          type="button"
-                          onClick={() => removeFractile(idx)}
-                          className="ml-2 hover:text-red-500"
-                        >
-                          ×
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+                <Label htmlFor="productName">Product Name *</Label>
+                <Input
+                  id="productName"
+                  value={productForm.name}
+                  onChange={(e) =>
+                    setProductForm({ ...productForm, name: e.target.value })
+                  }
+                  required
+                />
               </div>
-              
-              {/* Cells */}
               <div className="space-y-2">
-                <Label htmlFor="cell" className="text-sm">Cells</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="cell"
-                    value={componentInput.cell}
-                    onChange={(e) =>
-                      setComponentInput({
-                        ...componentInput,
-                        cell: e.target.value,
-                      })
-                    }
-                    onKeyPress={(e) => e.key === "Enter" && addCell()}
-                    placeholder="E.g., Cell-Type-1, Cell-Type-2"
-                  />
-                  <Button type="button" onClick={addCell} variant="outline">
-                    Add
-                  </Button>
-                </div>
-                {productForm.cells.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {productForm.cells.map((c, idx) => (
-                      <Badge key={idx} variant="secondary">
-                        {c.name}
-                        <button
-                          type="button"
-                          onClick={() => removeCell(idx)}
-                          className="ml-2 hover:text-red-500"
-                        >
-                          ×
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+                <Label htmlFor="productType">Product Type *</Label>
+                <Select
+                  id="productType"
+                  value={productForm.type}
+                  onChange={(e) =>
+                    setProductForm({ ...productForm, type: e.target.value })
+                  }
+                  required
+                >
+                  <option value="">Select Type</option>
+                  {productTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {formatProductType(type)}
+                    </option>
+                  ))}
+                </Select>
               </div>
-              
-              {/* Tiers */}
+              <div className="space-y-4 border-t pt-4">
+                <Label className="text-base font-semibold">Components</Label>
+
+                {/* Fractiles */}
+                <div className="space-y-2">
+                  <Label htmlFor="fractile" className="text-sm">
+                    Fractiles
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="fractile"
+                      value={componentInput.fractile}
+                      onChange={(e) =>
+                        setComponentInput({
+                          ...componentInput,
+                          fractile: e.target.value,
+                        })
+                      }
+                      onKeyPress={(e) => e.key === "Enter" && addFractile()}
+                      placeholder="E.g., Fractile-A, Fractile-B"
+                    />
+                    <Button
+                      type="button"
+                      onClick={addFractile}
+                      variant="outline"
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  {productForm.fractiles.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {productForm.fractiles.map((f, idx) => (
+                        <Badge key={idx} variant="secondary">
+                          {f.name}
+                          <button
+                            type="button"
+                            onClick={() => removeFractile(idx)}
+                            className="ml-2 hover:text-red-500"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Cells */}
+                <div className="space-y-2">
+                  <Label htmlFor="cell" className="text-sm">
+                    Cells
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="cell"
+                      value={componentInput.cell}
+                      onChange={(e) =>
+                        setComponentInput({
+                          ...componentInput,
+                          cell: e.target.value,
+                        })
+                      }
+                      onKeyPress={(e) => e.key === "Enter" && addCell()}
+                      placeholder="E.g., Cell-Type-1, Cell-Type-2"
+                    />
+                    <Button type="button" onClick={addCell} variant="outline">
+                      Add
+                    </Button>
+                  </div>
+                  {productForm.cells.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {productForm.cells.map((c, idx) => (
+                        <Badge key={idx} variant="secondary">
+                          {c.name}
+                          <button
+                            type="button"
+                            onClick={() => removeCell(idx)}
+                            className="ml-2 hover:text-red-500"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Tiers */}
+                <div className="space-y-2">
+                  <Label htmlFor="tier" className="text-sm">
+                    Tiers
+                  </Label>
+                  <div className="flex gap-2">
+                    <Input
+                      id="tier"
+                      value={componentInput.tier}
+                      onChange={(e) =>
+                        setComponentInput({
+                          ...componentInput,
+                          tier: e.target.value,
+                        })
+                      }
+                      onKeyPress={(e) => e.key === "Enter" && addTier()}
+                      placeholder="E.g., Top-Tier, Middle-Tier, Bottom-Tier"
+                    />
+                    <Button type="button" onClick={addTier} variant="outline">
+                      Add
+                    </Button>
+                  </div>
+                  {productForm.tiers.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {productForm.tiers.map((t, idx) => (
+                        <Badge key={idx} variant="secondary">
+                          {t.name}
+                          <button
+                            type="button"
+                            onClick={() => removeTier(idx)}
+                            className="ml-2 hover:text-red-500"
+                          >
+                            ×
+                          </button>
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
               <div className="space-y-2">
-                <Label htmlFor="tier" className="text-sm">Tiers</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="tier"
-                    value={componentInput.tier}
-                    onChange={(e) =>
-                      setComponentInput({
-                        ...componentInput,
-                        tier: e.target.value,
-                      })
-                    }
-                    onKeyPress={(e) => e.key === "Enter" && addTier()}
-                    placeholder="E.g., Top-Tier, Middle-Tier, Bottom-Tier"
-                  />
-                  <Button type="button" onClick={addTier} variant="outline">
-                    Add
-                  </Button>
-                </div>
-                {productForm.tiers.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {productForm.tiers.map((t, idx) => (
-                      <Badge key={idx} variant="secondary">
-                        {t.name}
-                        <button
-                          type="button"
-                          onClick={() => removeTier(idx)}
-                          className="ml-2 hover:text-red-500"
-                        >
-                          ×
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={productForm.description}
+                  onChange={(e) =>
+                    setProductForm({
+                      ...productForm,
+                      description: e.target.value,
+                    })
+                  }
+                  rows={3}
+                />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={productForm.description}
-                onChange={(e) =>
-                  setProductForm({
-                    ...productForm,
-                    description: e.target.value,
-                  })
-                }
-                rows={3}
-              />
-            </div>
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowProductModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit">Create Product</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowProductModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">Create Product</Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Create Batch Modal */}
-      <Dialog open={showBatchModal} onOpenChange={setShowBatchModal}>
-        <DialogContent onClose={() => setShowBatchModal(false)}>
-          <DialogHeader>
-            <DialogTitle>Record Production Batch</DialogTitle>
-          </DialogHeader>
-              <form onSubmit={handleCreateBatch} className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label htmlFor="batchProduct">Product *</Label>
-              <Select
-                id="batchProduct"
-                value={batchForm.product_id}
-                onChange={(e) =>
-                  setBatchForm({ ...batchForm, product_id: e.target.value })
-                }
-                required
-              >
-                <option value="">Select Product</option>
-                {products.map((product) => (
-                  <option key={product.id} value={product.id}>
-                    {product.name} ({formatProductType(product.type)})
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="quantity">Quantity Produced *</Label>
-              <Input
-                id="quantity"
-                type="number"
-                min="1"
-                value={batchForm.quantity_produced}
-                onChange={(e) =>
-                  setBatchForm({
-                    ...batchForm,
-                    quantity_produced: e.target.value,
-                  })
-                }
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="shift">Shift *</Label>
-              <Select
-                id="shift"
-                value={batchForm.shift || "morning"}
-                onChange={(e) => setBatchForm({ ...batchForm, shift: e.target.value })}
-                required
-              >
-                <option value="morning">Morning</option>
-                <option value="afternoon">Afternoon</option>
-                <option value="night">Night</option>
-              </Select>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+      {activeTab === "batches" && (
+        <Dialog open={showBatchModal} onOpenChange={setShowBatchModal}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Record Production Batch</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleCreateBatch} className="space-y-4 mt-4">
               <div className="space-y-2">
-                <Label htmlFor="startTime">Start Time (HH:MM) *</Label>
+                <Label htmlFor="batchProduct">Product *</Label>
+                <Select
+                  id="batchProduct"
+                  value={batchForm.product_id}
+                  onChange={(e) =>
+                    setBatchForm({ ...batchForm, product_id: e.target.value })
+                  }
+                  required
+                >
+                  <option value="">Select Product</option>
+                  {products.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name} ({formatProductType(product.type)})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="quantity">Quantity Produced *</Label>
                 <Input
-                  id="startTime"
-                  type="time"
-                  value={batchForm.start_time}
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  value={batchForm.quantity_produced}
                   onChange={(e) =>
                     setBatchForm({
                       ...batchForm,
-                      start_time: e.target.value,
+                      quantity_produced: e.target.value,
                     })
                   }
                   required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="endTime">End Time (HH:MM) *</Label>
-                <Input
-                  id="endTime"
-                  type="time"
-                  value={batchForm.end_time}
+                <Label htmlFor="shift">Shift *</Label>
+                <Select
+                  id="shift"
+                  value={batchForm.shift || "morning"}
                   onChange={(e) =>
-                    setBatchForm({
-                      ...batchForm,
-                      end_time: e.target.value,
-                    })
+                    setBatchForm({ ...batchForm, shift: e.target.value })
                   }
                   required
+                >
+                  <option value="morning">Morning</option>
+                  <option value="afternoon">Afternoon</option>
+                  <option value="night">Night</option>
+                </Select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="startTime">Start Time (HH:MM) *</Label>
+                  <Input
+                    id="startTime"
+                    type="time"
+                    value={batchForm.start_time}
+                    onChange={(e) =>
+                      setBatchForm({
+                        ...batchForm,
+                        start_time: e.target.value,
+                      })
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="endTime">End Time (HH:MM) *</Label>
+                  <Input
+                    id="endTime"
+                    type="time"
+                    value={batchForm.end_time}
+                    onChange={(e) =>
+                      setBatchForm({
+                        ...batchForm,
+                        end_time: e.target.value,
+                      })
+                    }
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="notes">Notes</Label>
+                <Textarea
+                  id="notes"
+                  value={batchForm.notes}
+                  onChange={(e) =>
+                    setBatchForm({ ...batchForm, notes: e.target.value })
+                  }
+                  rows={3}
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="notes">Notes</Label>
-              <Textarea
-                id="notes"
-                value={batchForm.notes}
-                onChange={(e) =>
-                  setBatchForm({ ...batchForm, notes: e.target.value })
-                }
-                rows={3}
-              />
-            </div>
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => setShowBatchModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit">Record Batch</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
+              <div className="flex justify-end space-x-2 pt-4">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowBatchModal(false)}
+                >
+                  Cancel
+                </Button>
+                <Button type="submit">Record Batch</Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };
