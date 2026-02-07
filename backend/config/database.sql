@@ -1,4 +1,3 @@
-
 DROP FUNCTION IF EXISTS get_next_batch_in_shift(INTEGER, shift_type, DATE) CASCADE;
 DROP FUNCTION IF EXISTS generate_batch_number(INTEGER, shift_type, INTEGER, DATE) CASCADE;
 DROP FUNCTION IF EXISTS get_shift_production(INTEGER, shift_type, DATE) CASCADE;
@@ -46,7 +45,7 @@ CREATE TABLE users (
     role user_role NOT NULL DEFAULT 'user',
     status user_status NOT NULL DEFAULT 'active',
     unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
-    permissions VARCHAR(255) DEFAULT 'create,read',
+    permissions VARCHAR(255) DEFAULT 'create,read,update, delete',
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -88,7 +87,6 @@ CREATE TABLE product_cells (
     CONSTRAINT unique_product_cell UNIQUE(product_id, name)
 );
 
--- Tiers Table 
 CREATE TABLE product_tiers (
     id SERIAL PRIMARY KEY,
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
@@ -99,7 +97,6 @@ CREATE TABLE product_tiers (
     CONSTRAINT unique_product_tier UNIQUE(product_id, name)
 );
 
--- Batches Table 
 CREATE TABLE batches (
     id SERIAL PRIMARY KEY,
     batch_number VARCHAR(50) NOT NULL UNIQUE,
