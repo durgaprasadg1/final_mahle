@@ -24,7 +24,22 @@ export const AuthProvider = ({ children }) => {
 
     if (storedToken && storedUser) {
       setToken(storedToken);
-      setUser(JSON.parse(storedUser));
+      try {
+        const parsed = JSON.parse(storedUser);
+        // Normalize permissions if backend returned CSV string
+        if (parsed && parsed.permissions && typeof parsed.permissions === "string") {
+          const perms = parsed.permissions.split(",").map((p) => p.trim());
+          parsed.permissions = {
+            create: perms.includes("create"),
+            read: perms.includes("read"),
+            update: perms.includes("update"),
+            delete: perms.includes("delete"),
+          };
+        }
+        setUser(parsed);
+      } catch (e) {
+        setUser(null);
+      }
     }
     setLoading(false);
   }, []);

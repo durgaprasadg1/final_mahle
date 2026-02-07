@@ -39,6 +39,32 @@ class UserController {
 
       const hashedPassword = await bcrypt.hash(password, 10);
 
+      // Permissions can be sent as:
+      // 1. Object: { create: true, read: true, update: false, delete: false }
+      // 2. String: "create,read"
+      // 3. Array: ["create", "read"]
+      let permissionsData = permissions;
+
+      // If permissions is an array, convert to object
+      if (Array.isArray(permissions)) {
+        permissionsData = {
+          create: permissions.includes("create"),
+          read: permissions.includes("read"),
+          update: permissions.includes("update"),
+          delete: permissions.includes("delete"),
+        };
+      }
+
+      // Default permissions if not provided
+      if (!permissionsData) {
+        permissionsData = {
+          create: true,
+          read: true,
+          update: false,
+          delete: false,
+        };
+      }
+
       const userData = {
         email,
         password: hashedPassword,
@@ -46,12 +72,7 @@ class UserController {
         role: "user",
         status: "active",
         unit_id,
-        permissions: permissions || {
-          create: true,
-          read: true,
-          update: true,
-          delete: false,
-        },
+        permissions: permissionsData, // Will be converted to string in User.create()
         created_by: req.user.id,
       };
 
@@ -153,7 +174,21 @@ class UserController {
       if (email) updateData.email = email;
       if (name) updateData.name = name;
       if (unit_id) updateData.unit_id = unit_id;
-      if (permissions) updateData.permissions = permissions;
+
+      // Handle permissions update
+      if (permissions) {
+        // Permissions can be sent as object, string, or array
+        if (Array.isArray(permissions)) {
+          updateData.permissions = {
+            create: permissions.includes("create"),
+            read: permissions.includes("read"),
+            update: permissions.includes("update"),
+            delete: permissions.includes("delete"),
+          };
+        } else {
+          updateData.permissions = permissions;
+        }
+      }
 
       if (password) {
         if (password.length < 6) {
