@@ -7,9 +7,10 @@ class Batch {
       product_id,
       unit_id,
       quantity_produced,
-      batch_start_time,
-      batch_end_time,
-      duration_minutes,
+      shift,
+      batch_in_shift,
+      start_time,
+      end_time,
       status,
       notes,
       created_by,
@@ -17,10 +18,19 @@ class Batch {
 
     const query = `
       INSERT INTO batches (
-        batch_number, product_id, unit_id, quantity_produced,
-        batch_start_time, batch_end_time, duration_minutes, status, notes, created_by
+        batch_number, 
+        product_id, 
+        unit_id, 
+        quantity_produced, 
+        shift, 
+        batch_in_shift, 
+        start_time, 
+        end_time, 
+        status, 
+        notes, 
+        created_by
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       RETURNING *
     `;
 
@@ -29,9 +39,10 @@ class Batch {
       product_id,
       unit_id,
       quantity_produced,
-      batch_start_time,
-      batch_end_time,
-      duration_minutes || 60,
+      shift,
+      batch_in_shift,
+      start_time,
+      end_time,
       status || "completed",
       notes,
       created_by,
@@ -43,10 +54,13 @@ class Batch {
 
   static async findById(id) {
     const query = `
-      SELECT b.*, 
-             p.name as product_name, p.type as product_type,
-             units.name as unit_name, units.code as unit_code,
-             users.name as created_by_name
+      SELECT 
+        b.*, 
+        p.name as product_name, 
+        p.type as product_type,
+        units.name as unit_name, 
+        units.code as unit_code,
+        users.name as created_by_name
       FROM batches b
       LEFT JOIN products p ON b.product_id = p.id
       LEFT JOIN units ON b.unit_id = units.id
@@ -59,10 +73,13 @@ class Batch {
 
   static async findAll(filters = {}) {
     let query = `
-      SELECT b.*, 
-             p.name as product_name, p.type as product_type,
-             units.name as unit_name, units.code as unit_code,
-             users.name as created_by_name
+      SELECT 
+        b.*, 
+        p.name as product_name, 
+        p.type as product_type,
+        units.name as unit_name, 
+        units.code as unit_code,
+        users.name as created_by_name
       FROM batches b
       LEFT JOIN products p ON b.product_id = p.id
       LEFT JOIN units ON b.unit_id = units.id
@@ -85,6 +102,12 @@ class Batch {
       paramCount++;
     }
 
+    if (filters.shift) {
+      query += ` AND b.shift = $${paramCount}`;
+      values.push(filters.shift);
+      paramCount++;
+    }
+
     if (filters.status) {
       query += ` AND b.status = $${paramCount}`;
       values.push(filters.status);
@@ -92,18 +115,18 @@ class Batch {
     }
 
     if (filters.date_from) {
-      query += ` AND b.batch_start_time >= $${paramCount}`;
+      query += ` AND DATE(b.created_at) >= $${paramCount}`;
       values.push(filters.date_from);
       paramCount++;
     }
 
     if (filters.date_to) {
-      query += ` AND b.batch_end_time <= $${paramCount}`;
+      query += ` AND DATE(b.created_at) <= $${paramCount}`;
       values.push(filters.date_to);
       paramCount++;
     }
 
-    query += ` ORDER BY b.batch_start_time DESC`;
+    query += ` ORDER BY b.created_at DESC, b.shift, b.batch_in_shift`;
 
     if (filters.limit) {
       query += ` LIMIT $${paramCount}`;
@@ -117,17 +140,47 @@ class Batch {
 
   static async findByUnit(unitId, limit = 50) {
     const query = `
-      SELECT b.*, 
-             p.name as product_name, p.type as product_type,
-             users.name as created_by_name
+      SELECT 
+        b.*, 
+        p.name as product_name, 
+        p.type as product_type,
+        users.name as created_by_name
       FROM batches b
       LEFT JOIN products p ON b.product_id = p.id
       LEFT JOIN users ON b.created_by = users.id
       WHERE b.unit_id = $1
-      ORDER BY b.batch_start_time DESC
+      ORDER BY b.created_at DESC, b.shift, b.batch_in_shift
       LIMIT $2
     `;
     const result = await pool.query(query, [unitId, limit]);
+    return result.rows;
+  }
+
+  static async findByShift(unitId, shift, date = null) {
+    let query = `
+      SELECT 
+        b.*, 
+        p.name as product_name, 
+        p.type as product_type,
+        users.name as created_by_name
+      FROM batches b
+      LEFT JOIN products p ON b.product_id = p.id
+      LEFT JOIN users ON b.created_by = users.id
+      WHERE b.unit_id = $1 AND b.shift = $2
+    `;
+
+    const values = [unitId, shift];
+    let paramCount = 3;
+
+    if (date) {
+      query += ` AND DATE(b.created_at) = $${paramCount}`;
+      values.push(date);
+      paramCount++;
+    }
+
+    query += ` ORDER BY b.batch_in_shift`;
+
+    const result = await pool.query(query, values);
     return result.rows;
   }
 
@@ -166,43 +219,89 @@ class Batch {
     return result.rows[0];
   }
 
+  // Get statistics for a unit
   static async getUnitStatistics(unitId, dateFrom, dateTo) {
     const query = `
       SELECT 
         COUNT(*) as total_batches,
         SUM(quantity_produced) as total_quantity,
         AVG(quantity_produced) as avg_quantity,
-        COUNT(DISTINCT product_id) as unique_products,
-        SUM(duration_minutes) as total_duration_minutes
+        COUNT(DISTINCT product_id) as unique_products
       FROM batches
       WHERE unit_id = $1
-        AND batch_start_time >= $2
-        AND batch_end_time <= $3
+        AND DATE(created_at) >= $2
+        AND DATE(created_at) <= $3
     `;
     const result = await pool.query(query, [unitId, dateFrom, dateTo]);
     return result.rows[0];
   }
 
-  static async generateBatchNumber(unitId) {
+  // Get statistics by shift
+  static async getShiftStatistics(unitId, dateFrom, dateTo) {
     const query = `
-      SELECT batch_number FROM batches 
-      WHERE unit_id = $1 
-      ORDER BY created_at DESC 
-      LIMIT 1
+      SELECT 
+        shift,
+        COUNT(*) as total_batches,
+        SUM(quantity_produced) as total_quantity,
+        AVG(quantity_produced) as avg_quantity
+      FROM batches
+      WHERE unit_id = $1
+        AND DATE(created_at) >= $2
+        AND DATE(created_at) <= $3
+      GROUP BY shift
+      ORDER BY 
+        CASE shift
+          WHEN 'morning' THEN 1
+          WHEN 'afternoon' THEN 2
+          WHEN 'night' THEN 3
+        END
     `;
-    const result = await pool.query(query, [unitId]);
+    const result = await pool.query(query, [unitId, dateFrom, dateTo]);
+    return result.rows;
+  }
 
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    let sequence = 1;
+  // Get next batch number for a shift on a specific date
+  static async getNextBatchInShift(unitId, shift, date = null) {
+    const queryDate = date || new Date().toISOString().split("T")[0];
 
-    if (result.rows.length > 0) {
-      const lastBatch = result.rows[0].batch_number;
-      const lastDate = lastBatch.split("-")[1];
-      if (lastDate === today) {
-        sequence = parseInt(lastBatch.split("-")[2]) + 1;
-      }
+    const query = `
+      SELECT COALESCE(MAX(batch_in_shift), 0) + 1 as next_batch
+      FROM batches
+      WHERE unit_id = $1
+        AND shift = $2
+        AND DATE(created_at) = $3
+    `;
+
+    const result = await pool.query(query, [unitId, shift, queryDate]);
+    return result.rows[0].next_batch;
+  }
+
+  // Generate batch number with shift
+  // Format: UNITCODE-YYYY-MM-DD-SHIFT-###
+  // Example: U-GAMMA-2026-02-07-MORNING-001
+  static async generateBatchNumber(unitId, shift, batchInShift) {
+    const unitQuery = "SELECT code FROM units WHERE id = $1";
+    const unitResult = await pool.query(unitQuery, [unitId]);
+
+    if (!unitResult.rows.length) {
+      throw new Error("Unit not found");
     }
-    return `U${unitId}-${today}-${sequence.toString().padStart(4, "0")}`;
+
+    const unitCode = unitResult.rows[0].code;
+    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
+    const shiftUpper = shift.toUpperCase();
+    const batchNum = batchInShift.toString().padStart(3, "0");
+
+    return `${unitCode}-${today}-${shiftUpper}-${batchNum}`;
+  }
+
+  // Get shift types enum
+  static async getShiftTypes() {
+    const query = `
+      SELECT unnest(enum_range(NULL::shift_type))::text as shift
+    `;
+    const result = await pool.query(query);
+    return result.rows.map((row) => row.shift);
   }
 }
 

@@ -7,22 +7,28 @@ class BatchController {
       const {
         product_id,
         quantity_produced,
-        batch_start_time,
-        batch_end_time,
-        duration_minutes,
+        shift,
+        batch_in_shift,
+        start_time,
+        end_time,
         status,
         notes,
       } = req.body;
 
-      if (
-        !product_id ||
-        !quantity_produced ||
-        !batch_start_time ||
-        !batch_end_time
-      ) {
+      // Validation
+      if (!product_id || !quantity_produced || !shift || !start_time || !end_time) {
         return res.status(400).json({
           success: false,
-          message: "Product, quantity, start time, and end time are required",
+          message: "Product, quantity, shift, start time, and end time are required",
+        });
+      }
+
+      // Validate shift
+      const validShifts = ["morning", "afternoon", "night"];
+      if (!validShifts.includes(shift)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid shift. Must be morning, afternoon, or night",
         });
       }
 
@@ -45,17 +51,28 @@ class BatchController {
 
       const unit_id = product.unit_id;
 
+      // Get next batch_in_shift if not provided
+      let finalBatchInShift = batch_in_shift;
+      if (!finalBatchInShift) {
+        finalBatchInShift = await Batch.getNextBatchInShift(unit_id, shift);
+      }
+
       // Generate batch number
-      const batch_number = await Batch.generateBatchNumber(unit_id);
+      const batch_number = await Batch.generateBatchNumber(
+        unit_id,
+        shift,
+        finalBatchInShift
+      );
 
       const batchData = {
         batch_number,
         product_id,
         unit_id,
         quantity_produced,
-        batch_start_time,
-        batch_end_time,
-        duration_minutes: duration_minutes || 60,
+        shift,
+        batch_in_shift: finalBatchInShift,
+        start_time,
+        end_time,
         status: status || "completed",
         notes,
         created_by: req.user.id,
@@ -81,7 +98,7 @@ class BatchController {
   // Get all batches
   static async getAllBatches(req, res) {
     try {
-      const { product_id, status, date_from, date_to, limit } = req.query;
+      const { product_id, shift, status, date_from, date_to, limit } = req.query;
       const filters = {};
 
       // If user is not admin, filter by their unit
@@ -92,6 +109,7 @@ class BatchController {
       }
 
       if (product_id) filters.product_id = parseInt(product_id);
+      if (shift) filters.shift = shift;
       if (status) filters.status = status;
       if (date_from) filters.date_from = date_from;
       if (date_to) filters.date_to = date_to;
@@ -155,9 +173,10 @@ class BatchController {
       const { id } = req.params;
       const {
         quantity_produced,
-        batch_start_time,
-        batch_end_time,
-        duration_minutes,
+        shift,
+        batch_in_shift,
+        start_time,
+        end_time,
         status,
         notes,
       } = req.body;
@@ -178,13 +197,25 @@ class BatchController {
         });
       }
 
+      // Validate shift if provided
+      if (shift) {
+        const validShifts = ["morning", "afternoon", "night"];
+        if (!validShifts.includes(shift)) {
+          return res.status(400).json({
+            success: false,
+            message: "Invalid shift. Must be morning, afternoon, or night",
+          });
+        }
+      }
+
       const updateData = {};
       if (quantity_produced !== undefined)
         updateData.quantity_produced = quantity_produced;
-      if (batch_start_time) updateData.batch_start_time = batch_start_time;
-      if (batch_end_time) updateData.batch_end_time = batch_end_time;
-      if (duration_minutes !== undefined)
-        updateData.duration_minutes = duration_minutes;
+      if (shift) updateData.shift = shift;
+      if (batch_in_shift !== undefined)
+        updateData.batch_in_shift = batch_in_shift;
+      if (start_time) updateData.start_time = start_time;
+      if (end_time) updateData.end_time = end_time;
       if (status) updateData.status = status;
       if (notes !== undefined) updateData.notes = notes;
 
@@ -273,6 +304,48 @@ class BatchController {
     }
   }
 
+  // Get batches by shift
+  static async getBatchesByShift(req, res) {
+    try {
+      const { unitId, shift } = req.params;
+      const { date } = req.query;
+
+      // Check if user has access to this unit
+      if (req.user.role !== "admin" && parseInt(unitId) !== req.user.unit_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this unit",
+        });
+      }
+
+      // Validate shift
+      const validShifts = ["morning", "afternoon", "night"];
+      if (!validShifts.includes(shift)) {
+        return res.status(400).json({
+          success: false,
+          message: "Invalid shift. Must be morning, afternoon, or night",
+        });
+      }
+
+      const batches = await Batch.findByShift(unitId, shift, date);
+
+      res.json({
+        success: true,
+        shift,
+        date: date || "today",
+        count: batches.length,
+        data: batches,
+      });
+    } catch (error) {
+      console.error("Get batches by shift error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching batches",
+        error: error.message,
+      });
+    }
+  }
+
   // Get batch statistics
   static async getBatchStatistics(req, res) {
     try {
@@ -297,7 +370,7 @@ class BatchController {
       const statistics = await Batch.getUnitStatistics(
         unitId,
         date_from,
-        date_to,
+        date_to
       );
 
       res.json({
@@ -309,6 +382,101 @@ class BatchController {
       res.status(500).json({
         success: false,
         message: "Error fetching statistics",
+        error: error.message,
+      });
+    }
+  }
+
+  // Get shift statistics
+  static async getShiftStatistics(req, res) {
+    try {
+      const { unitId } = req.params;
+      const { date_from, date_to } = req.query;
+
+      // Check if user has access to this unit
+      if (req.user.role !== "admin" && parseInt(unitId) !== req.user.unit_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this unit",
+        });
+      }
+
+      if (!date_from || !date_to) {
+        return res.status(400).json({
+          success: false,
+          message: "Date range (date_from and date_to) is required",
+        });
+      }
+
+      const statistics = await Batch.getShiftStatistics(
+        unitId,
+        date_from,
+        date_to
+      );
+
+      res.json({
+        success: true,
+        data: statistics,
+      });
+    } catch (error) {
+      console.error("Get shift statistics error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching shift statistics",
+        error: error.message,
+      });
+    }
+  }
+
+  // Get next batch in shift (helper endpoint)
+  static async getNextBatchInShift(req, res) {
+    try {
+      const { unitId, shift } = req.params;
+      const { date } = req.query;
+
+      // Check if user has access to this unit
+      if (req.user.role !== "admin" && parseInt(unitId) !== req.user.unit_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this unit",
+        });
+      }
+
+      const nextBatch = await Batch.getNextBatchInShift(unitId, shift, date);
+
+      res.json({
+        success: true,
+        data: {
+          unit_id: parseInt(unitId),
+          shift,
+          date: date || new Date().toISOString().split("T")[0],
+          next_batch_in_shift: nextBatch,
+        },
+      });
+    } catch (error) {
+      console.error("Get next batch in shift error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error getting next batch number",
+        error: error.message,
+      });
+    }
+  }
+
+  // Get shift types
+  static async getShiftTypes(req, res) {
+    try {
+      const shifts = await Batch.getShiftTypes();
+
+      res.json({
+        success: true,
+        data: shifts,
+      });
+    } catch (error) {
+      console.error("Get shift types error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching shift types",
         error: error.message,
       });
     }

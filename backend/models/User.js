@@ -1,6 +1,58 @@
 import pool from "../config/database.js";
 
 class User {
+  // Helper: Convert permissions to JSON object for JSONB storage
+  static permissionsToJSON(permissionsInput) {
+    // If already an object, return as-is
+    if (typeof permissionsInput === "object" && permissionsInput !== null) {
+      return {
+        create: Boolean(permissionsInput.create),
+        read: Boolean(permissionsInput.read),
+        update: Boolean(permissionsInput.update),
+        delete: Boolean(permissionsInput.delete),
+      };
+    }
+
+    // If string like "create,read", convert to object
+    if (typeof permissionsInput === "string") {
+      const permsArray = permissionsInput.split(",").map((p) => p.trim());
+      return {
+        create: permsArray.includes("create"),
+        read: permsArray.includes("read"),
+        update: permsArray.includes("update"),
+        delete: permsArray.includes("delete"),
+      };
+    }
+
+    // Default permissions
+    return { create: false, read: true, update: false, delete: false };
+  }
+
+  // Helper: Convert JSON object/string to permissions object
+  static permissionsToObject(permissionsInput) {
+    // If string (from database JSONB or CSV)
+    if (typeof permissionsInput === "string") {
+      try {
+        // Try parsing as JSON first
+        const parsed = JSON.parse(permissionsInput);
+        return this.permissionsToJSON(parsed);
+      } catch (e) {
+        // Fall back to CSV parsing
+        const permsArray = permissionsInput.split(",").map((p) => p.trim());
+        return {
+          create: permsArray.includes("create"),
+          read: permsArray.includes("read"),
+          update: permsArray.includes("update"),
+          delete: permsArray.includes("delete"),
+        };
+      }
+    }
+
+    // If already an object
+    return this.permissionsToJSON(permissionsInput);
+  }
+
+  // Create a new user
   static async create(userData) {
     const {
       email,
@@ -12,6 +64,9 @@ class User {
       permissions,
       created_by,
     } = userData;
+
+    // Convert permissions to JSON object
+    const permissionsObj = this.permissionsToJSON(permissions);
 
     const query = `
       INSERT INTO users (email, password, name, role, status, unit_id, permissions, created_by)
@@ -26,11 +81,17 @@ class User {
       role || "user",
       status || "active",
       unit_id,
-      permissions,
+      JSON.stringify(permissionsObj), // Store as JSON string for JSONB column
       created_by,
     ];
+
     const result = await pool.query(query, values);
-    return result.rows[0];
+    const user = result.rows[0];
+
+    // Convert permissions back to object for response
+    user.permissions = this.permissionsToObject(user.permissions);
+
+    return user;
   }
 
   // Find user by email
@@ -42,7 +103,16 @@ class User {
       WHERE u.email = $1
     `;
     const result = await pool.query(query, [email]);
-    return result.rows[0];
+    
+    if (!result.rows.length) {
+      return null;
+    }
+
+    const user = result.rows[0];
+    // Convert permissions to object for API response
+    user.permissions = this.permissionsToObject(user.permissions);
+    
+    return user;
   }
 
   // Find user by ID
@@ -54,7 +124,16 @@ class User {
       WHERE u.id = $1
     `;
     const result = await pool.query(query, [id]);
-    return result.rows[0];
+    
+    if (!result.rows.length) {
+      return null;
+    }
+
+    const user = result.rows[0];
+    // Convert permissions to object for API response
+    user.permissions = this.permissionsToObject(user.permissions);
+    
+    return user;
   }
 
   // Get all users (with filters)
@@ -94,6 +173,12 @@ class User {
     query += ` ORDER BY u.created_at DESC`;
 
     const result = await pool.query(query, values);
+    
+    // Convert permissions to object for all users
+    result.rows.forEach((user) => {
+      user.permissions = this.permissionsToObject(user.permissions);
+    });
+
     return result.rows;
   }
 
@@ -105,8 +190,15 @@ class User {
 
     Object.keys(updateData).forEach((key) => {
       if (updateData[key] !== undefined && key !== "id") {
-        fields.push(`${key} = $${paramCount}`);
-        values.push(updateData[key]);
+        // Special handling for permissions
+        if (key === "permissions") {
+          fields.push(`${key} = $${paramCount}`);
+          const permissionsObj = this.permissionsToJSON(updateData[key]);
+          values.push(JSON.stringify(permissionsObj)); // Convert to JSON string for JSONB
+        } else {
+          fields.push(`${key} = $${paramCount}`);
+          values.push(updateData[key]);
+        }
         paramCount++;
       }
     });
@@ -124,7 +216,12 @@ class User {
     `;
 
     const result = await pool.query(query, values);
-    return result.rows[0];
+    const user = result.rows[0];
+
+    // Convert permissions back to object
+    user.permissions = this.permissionsToObject(user.permissions);
+
+    return user;
   }
 
   // Delete user
@@ -160,7 +257,22 @@ class User {
       ORDER BY name
     `;
     const result = await pool.query(query, [unitId]);
+    
+    // Convert permissions to object for all users
+    result.rows.forEach((user) => {
+      user.permissions = this.permissionsToObject(user.permissions);
+    });
+
     return result.rows;
+  }
+
+  // Check if user has specific permission
+  static hasPermission(permissionsStr, permission) {
+    if (!permissionsStr || typeof permissionsStr !== "string") {
+      return false;
+    }
+    const permsArray = permissionsStr.split(",").map((p) => p.trim());
+    return permsArray.includes(permission);
   }
 }
 

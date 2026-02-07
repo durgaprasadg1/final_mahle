@@ -1,17 +1,18 @@
 import Product from "../models/Product.js";
+import ProductComponent from "../models/ProductComponent.js";
 
 class ProductController {
-  // Create product
+  // Create product with components
   static async createProduct(req, res) {
     try {
       const {
         name,
         type,
+        description,
+        specifications,
         fractiles,
         cells,
         tiers,
-        description,
-        specifications,
       } = req.body;
 
       if (!name || !type) {
@@ -35,12 +36,12 @@ class ProductController {
         name,
         type,
         unit_id,
-        fractiles: fractiles || 0,
-        cells: cells || 0,
-        tiers: tiers || 0,
         description,
         specifications,
         created_by: req.user.id,
+        fractiles: fractiles || [],
+        cells: cells || [],
+        tiers: tiers || [],
       };
 
       const product = await Product.create(productData);
@@ -63,7 +64,7 @@ class ProductController {
   // Get all products
   static async getAllProducts(req, res) {
     try {
-      const { type, search } = req.query;
+      const { type, search, with_components } = req.query;
       const filters = {};
 
       // If user is not admin, filter by their unit
@@ -76,7 +77,11 @@ class ProductController {
       if (type) filters.type = type;
       if (search) filters.search = search;
 
-      const products = await Product.findAll(filters);
+      // Get products with or without components based on query param
+      const products =
+        with_components === "true"
+          ? await Product.findAllWithComponents(filters)
+          : await Product.findAll(filters);
 
       res.json({
         success: true,
@@ -135,11 +140,11 @@ class ProductController {
       const {
         name,
         type,
+        description,
+        specifications,
         fractiles,
         cells,
         tiers,
-        description,
-        specifications,
       } = req.body;
 
       const product = await Product.findById(id);
@@ -161,12 +166,12 @@ class ProductController {
       const updateData = {};
       if (name) updateData.name = name;
       if (type) updateData.type = type;
-      if (fractiles !== undefined) updateData.fractiles = fractiles;
-      if (cells !== undefined) updateData.cells = cells;
-      if (tiers !== undefined) updateData.tiers = tiers;
       if (description !== undefined) updateData.description = description;
       if (specifications !== undefined)
         updateData.specifications = specifications;
+      if (fractiles !== undefined) updateData.fractiles = fractiles;
+      if (cells !== undefined) updateData.cells = cells;
+      if (tiers !== undefined) updateData.tiers = tiers;
 
       const updatedProduct = await Product.update(id, updateData);
 
@@ -266,6 +271,190 @@ class ProductController {
       res.status(500).json({
         success: false,
         message: "Error fetching products",
+        error: error.message,
+      });
+    }
+  }
+
+  // Get product components
+  static async getProductComponents(req, res) {
+    try {
+      const { id } = req.params;
+
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found",
+        });
+      }
+
+      // Check if user has access to this product
+      if (req.user.role !== "admin" && product.unit_id !== req.user.unit_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this product",
+        });
+      }
+
+      const components = await ProductComponent.getAllComponentsByProduct(id);
+
+      res.json({
+        success: true,
+        data: components,
+      });
+    } catch (error) {
+      console.error("Get product components error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching product components",
+        error: error.message,
+      });
+    }
+  }
+
+  // Add fractile to product
+  static async addFractile(req, res) {
+    try {
+      const { id } = req.params;
+      const { name, count, description } = req.body;
+
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          message: "Fractile name is required",
+        });
+      }
+
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found",
+        });
+      }
+
+      if (req.user.role !== "admin" && product.unit_id !== req.user.unit_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this product",
+        });
+      }
+
+      const fractile = await ProductComponent.createFractile(id, {
+        name,
+        count: count || 0,
+        description,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Fractile added successfully",
+        data: fractile,
+      });
+    } catch (error) {
+      console.error("Add fractile error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error adding fractile",
+        error: error.message,
+      });
+    }
+  }
+
+  // Add cell to product
+  static async addCell(req, res) {
+    try {
+      const { id } = req.params;
+      const { name, count, description } = req.body;
+
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          message: "Cell name is required",
+        });
+      }
+
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found",
+        });
+      }
+
+      if (req.user.role !== "admin" && product.unit_id !== req.user.unit_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this product",
+        });
+      }
+
+      const cell = await ProductComponent.createCell(id, {
+        name,
+        count: count || 0,
+        description,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Cell added successfully",
+        data: cell,
+      });
+    } catch (error) {
+      console.error("Add cell error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error adding cell",
+        error: error.message,
+      });
+    }
+  }
+
+  // Add tier to product
+  static async addTier(req, res) {
+    try {
+      const { id } = req.params;
+      const { name, count, description } = req.body;
+
+      if (!name) {
+        return res.status(400).json({
+          success: false,
+          message: "Tier name is required",
+        });
+      }
+
+      const product = await Product.findById(id);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found",
+        });
+      }
+
+      if (req.user.role !== "admin" && product.unit_id !== req.user.unit_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this product",
+        });
+      }
+
+      const tier = await ProductComponent.createTier(id, {
+        name,
+        count: count || 0,
+        description,
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Tier added successfully",
+        data: tier,
+      });
+    } catch (error) {
+      console.error("Add tier error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error adding tier",
         error: error.message,
       });
     }
