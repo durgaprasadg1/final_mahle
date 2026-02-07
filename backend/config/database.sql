@@ -1,5 +1,3 @@
-
-
 DROP TABLE IF EXISTS batches CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
@@ -22,7 +20,7 @@ CREATE TABLE units (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Users Table (Admin and Users)
+
 CREATE TABLE users (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
@@ -31,7 +29,7 @@ CREATE TABLE users (
     role user_role NOT NULL DEFAULT 'user',
     status user_status NOT NULL DEFAULT 'active',
     unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
-    permissions JSONB DEFAULT '{"create": true, "read": true, "update": true, "delete": false}',
+    permissions JSONB DEFAULT '{"create": true, "read": true, "update": true, "delete": false}', varchar
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
