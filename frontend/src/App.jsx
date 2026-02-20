@@ -11,6 +11,10 @@ import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import ComponentTemplates from "./pages/admin/ComponentTemplates";
+import FractileTemplates from "./pages/admin/FractileTemplates";
+import CellTemplates from "./pages/admin/CellTemplates";
+import TierTemplates from "./pages/admin/TierTemplates";
 import UserDashboard from "./pages/user/UserDashboard";
 import "./index.css";
 
@@ -33,6 +37,38 @@ function App() {
             element={
               <ProtectedRoute>
                 <UserDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/templates"
+            element={
+              <ProtectedRoute>
+                <ComponentTemplates />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/templates/fractiles"
+            element={
+              <ProtectedRoute>
+                <FractileTemplates />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/templates/cells"
+            element={
+              <ProtectedRoute>
+                <CellTemplates />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/templates/tiers"
+            element={
+              <ProtectedRoute>
+                <TierTemplates />
               </ProtectedRoute>
             }
           />

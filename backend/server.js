@@ -8,6 +8,7 @@ import userRoutes from "./routes/userRoutes.js";
 import unitRoutes from "./routes/unitRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
+import templateRoutes from "./routes/templateRoutes.js";
 
 dotenv.config();
 
@@ -31,12 +32,13 @@ app.use("/api/users", userRoutes);
 app.use("/api/units", unitRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/batches", batchRoutes);
+app.use("/api/templates", templateRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-    console.log(`backend running on port ${PORT}`);
+  console.log(`backend running on port ${PORT}`);
 });
 
 process.on("unhandledRejection", (err) => {
