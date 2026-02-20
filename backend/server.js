@@ -8,6 +8,7 @@ import userRoutes from "./routes/userRoutes.js";
 import unitRoutes from "./routes/unitRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
+import shiftRoutes from "./routes/shiftRoutes.js";
 
 dotenv.config();
 
@@ -31,6 +32,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/units", unitRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/batches", batchRoutes);
+app.use("/api/shifts", shiftRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

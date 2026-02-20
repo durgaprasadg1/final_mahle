@@ -11,7 +11,9 @@ import { AuthProvider } from "./contexts/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Login from "./pages/Login";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import ShiftCreator from "./pages/admin/ShiftCreator";
 import UserDashboard from "./pages/user/UserDashboard";
+import AddProduct from "./pages/user/AddProduct";
 import "./index.css";
 
 function App() {
@@ -29,10 +31,26 @@ function App() {
             }
           />
           <Route
+            path="/admin/shifts/create"
+            element={
+              <ProtectedRoute adminOnly>
+                <ShiftCreator />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/dashboard"
             element={
               <ProtectedRoute>
                 <UserDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/add-product"
+            element={
+              <ProtectedRoute>
+                <AddProduct />
               </ProtectedRoute>
             }
           />

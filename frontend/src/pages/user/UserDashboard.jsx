@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { productAPI, batchAPI } from "../../lib/api";
+import { productAPI, batchAPI, shiftAPI } from "../../lib/api";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -37,19 +37,24 @@ import {
   TrendingUp,
   Edit,
   Trash2,
-  Calendar,
 } from "lucide-react";
-import { formatDate, formatProductType, formatTime } from "../../lib/utils";
+import { formatProductType, formatTime } from "../../lib/utils";
 
 const UserDashboard = () => {
   const { user, logout } = useAuth();
   const [products, setProducts] = useState([]);
   const [batches, setBatches] = useState([]);
   const [productTypes, setProductTypes] = useState([]);
+  const [shiftOptions, setShiftOptions] = useState([
+    { value: "morning", label: "Morning" },
+    { value: "afternoon", label: "Afternoon" },
+    { value: "night", label: "Night" },
+  ]);
   const [loading, setLoading] = useState(true);
   const [showProductModal, setShowProductModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [activeTab, setActiveTab] = useState("products");
+  const [editingProductId, setEditingProductId] = useState(null);
 
   const [productForm, setProductForm] = useState({
     name: "",
@@ -79,7 +84,57 @@ const UserDashboard = () => {
     fetchProducts();
     fetchBatches();
     fetchProductTypes();
+    fetchShifts();
   }, []);
+
+  const normalizeShiftValue = (shiftName) => {
+    const normalized = String(shiftName || "")
+      .trim()
+      .toLowerCase();
+
+    if (normalized.includes("morning")) return "morning";
+    if (normalized.includes("afternoon")) return "afternoon";
+    if (normalized.includes("night")) return "night";
+
+    return normalized;
+  };
+
+  const getDefaultShift = () => shiftOptions[0]?.value || "morning";
+
+  useEffect(() => {
+    if (!shiftOptions.some((shift) => shift.value === batchForm.shift)) {
+      setBatchForm((prev) => ({ ...prev, shift: getDefaultShift() }));
+    }
+  }, [shiftOptions]);
+
+  const fetchShifts = async () => {
+    try {
+      const response = await shiftAPI.getAll({ is_active: true });
+      const shifts = response.data?.data || [];
+      const validValues = new Set(["morning", "afternoon", "night"]);
+
+      const mapped = shifts
+        .map((shift) => {
+          const value = normalizeShiftValue(shift.name);
+          return {
+            value,
+            label: shift.name,
+          };
+        })
+        .filter((shift) => validValues.has(shift.value));
+
+      const unique = mapped.filter(
+        (shift, index, arr) =>
+          arr.findIndex((item) => item.value === shift.value) === index,
+      );
+
+      if (unique.length > 0) {
+        setShiftOptions(unique);
+      }
+    } catch (error) {
+      console.error("Failed to fetch shifts");
+    }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -181,6 +236,33 @@ const UserDashboard = () => {
     });
   };
 
+  const resetProductForm = () => {
+    setProductForm({
+      name: "",
+      type: "",
+      description: "",
+      fractiles: [],
+      cells: [],
+      tiers: [],
+    });
+    setComponentInput({ fractile: "", cell: "", tier: "" });
+    setEditingProductId(null);
+  };
+
+  const handleEditProduct = (product) => {
+    setEditingProductId(product.id);
+    setProductForm({
+      name: product.name || "",
+      type: product.type || "",
+      description: product.description || "",
+      fractiles: Array.isArray(product.fractiles) ? product.fractiles : [],
+      cells: Array.isArray(product.cells) ? product.cells : [],
+      tiers: Array.isArray(product.tiers) ? product.tiers : [],
+    });
+    setComponentInput({ fractile: "", cell: "", tier: "" });
+    setShowProductModal(true);
+  };
+
   const handleCreateProduct = async (e) => {
     e.preventDefault();
     try {
@@ -193,21 +275,22 @@ const UserDashboard = () => {
         tiers: productForm.tiers,
       };
 
-      await productAPI.create(payload);
-      toast.success("Product created successfully");
+      if (editingProductId) {
+        await productAPI.update(editingProductId, payload);
+        toast.success("Product updated successfully");
+      } else {
+        await productAPI.create(payload);
+        toast.success("Product created successfully");
+      }
+
       setShowProductModal(false);
-      setProductForm({
-        name: "",
-        type: "",
-        description: "",
-        fractiles: [],
-        cells: [],
-        tiers: [],
-      });
-      setComponentInput({ fractile: "", cell: "", tier: "" });
+      resetProductForm();
       fetchProducts();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to create product");
+      toast.error(
+        error.response?.data?.message ||
+          `Failed to ${editingProductId ? "update" : "create"} product`,
+      );
     }
   };
 
@@ -224,7 +307,7 @@ const UserDashboard = () => {
         quantity_produced: parseInt(batchForm.quantity_produced, 10),
         start_time: toTimeString(batchForm.start_time),
         end_time: toTimeString(batchForm.end_time),
-        shift: batchForm.shift || "morning",
+        shift: batchForm.shift || getDefaultShift(),
         notes: batchForm.notes,
       };
 
@@ -236,7 +319,7 @@ const UserDashboard = () => {
         quantity_produced: "",
         start_time: "",
         end_time: "",
-        shift: "morning",
+        shift: getDefaultShift(),
         notes: "",
       });
       fetchBatches();
@@ -395,9 +478,14 @@ const UserDashboard = () => {
                   </CardDescription>
                 </div>
                 {user?.permissions?.create && (
-                  <Button onClick={() => setShowProductModal(true)}>
+                  <Button 
+                    onClick={() => {
+                      resetProductForm();
+                      setShowProductModal(true);
+                    }}
+                  >
                     <Plus className="w-4 h-4 mr-2" />
-                    Add Product
+                    Create New
                   </Button>
                 )}
               </div>
@@ -504,15 +592,28 @@ const UserDashboard = () => {
                             {new Date(product.created_at).toLocaleDateString()}
                           </TableCell>
                           <TableCell className="text-right">
-                            {user?.permissions?.delete && (
+                            {user?.permissions?.update && (
                               <Button
                                 size="sm"
                                 variant="ghost"
-                                onClick={() => handleDeleteProduct(product.id)}
+                                onClick={() => handleEditProduct(product)}
                               >
-                                <Trash2 className="w-4 h-4 text-red-600" />
+                                <Edit className="w-4 h-4 text-blue-600" />
                               </Button>
                             )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteProduct(product.id)}
+                              disabled={!user?.permissions?.delete}
+                              title={
+                                user?.permissions?.delete
+                                  ? "Delete product"
+                                  : "Delete permission required"
+                              }
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </Button>
                           </TableCell>
                         </TableRow>
                       );
@@ -582,49 +683,68 @@ const UserDashboard = () => {
       {/* Create Product Modal */}
       {activeTab === "products" && (
         <Dialog open={showProductModal} onOpenChange={setShowProductModal}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>Add New Product</DialogTitle>
+              <DialogTitle>
+                {editingProductId ? "Update Product" : "Add New Product"}
+              </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleCreateProduct} className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="productName">Product Name *</Label>
-                <Input
-                  id="productName"
-                  value={productForm.name}
-                  onChange={(e) =>
-                    setProductForm({ ...productForm, name: e.target.value })
-                  }
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="productType">Product Type *</Label>
-                <Select
-                  id="productType"
-                  value={productForm.type}
-                  onChange={(e) =>
-                    setProductForm({ ...productForm, type: e.target.value })
-                  }
-                  required
-                >
-                  <option value="">Select Type</option>
-                  {productTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {formatProductType(type)}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-4 border-t pt-4">
-                <Label className="text-base font-semibold">Components</Label>
+            <form onSubmit={handleCreateProduct} className="space-y-6 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2 p-3 rounded">
+                  <Label htmlFor="productName">Product Name *</Label>
+                  <Input
+                    id="productName"
+                    value={productForm.name}
+                    onChange={(e) =>
+                      setProductForm({ ...productForm, name: e.target.value })
+                    }
+                    required
+                    className="border border-gray-400"
+                  />
+                </div>
 
-                {/* Fractiles */}
-                <div className="space-y-2">
-                  <Label htmlFor="fractile" className="text-sm">
-                    Fractiles
-                  </Label>
-                  <div className="flex gap-2">
+                <div className="space-y-2 p-3 rounded">
+                  <Label htmlFor="productType">Product Type *</Label>
+                  <Select
+                    id="productType"
+                    value={productForm.type}
+                    onChange={(e) =>
+                      setProductForm({ ...productForm, type: e.target.value })
+                    }
+                    required
+                    className="border border-gray-400"
+                  >
+                    <option value="">Select Type</option>
+                    {productTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {formatProductType(type)}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-2 p-3 rounded">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={productForm.description}
+                    onChange={(e) =>
+                      setProductForm({
+                        ...productForm,
+                        description: e.target.value,
+                      })
+                    }
+                    rows={1}
+                    className="border border-gray-400"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm">Fractiles</h3>
+                  <div className="flex gap-2 p-3 rounded">
                     <Input
                       id="fractile"
                       value={componentInput.fractile}
@@ -634,41 +754,38 @@ const UserDashboard = () => {
                           fractile: e.target.value,
                         })
                       }
-                      onKeyPress={(e) => e.key === "Enter" && addFractile()}
-                      placeholder="E.g., Fractile-A, Fractile-B"
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addFractile();
+                        }
+                      }}
+                      placeholder="Enter fractile..."
+                      className="border border-gray-400"
                     />
-                    <Button
-                      type="button"
-                      onClick={addFractile}
-                      variant="outline"
-                    >
+                    <Button type="button" onClick={addFractile} variant="outline">
                       Add
                     </Button>
                   </div>
-                  {productForm.fractiles.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {productForm.fractiles.map((f, idx) => (
-                        <Badge key={idx} variant="secondary">
-                          {f.name}
-                          <button
-                            type="button"
-                            onClick={() => removeFractile(idx)}
-                            className="ml-2 hover:text-red-500"
-                          >
-                            ×
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                    {productForm.fractiles.map((fractile, index) => (
+                      <Badge key={index} variant="secondary">
+                        {fractile.name}
+                        <button
+                          type="button"
+                          onClick={() => removeFractile(index)}
+                          className="ml-2 hover:text-red-500"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Cells */}
-                <div className="space-y-2">
-                  <Label htmlFor="cell" className="text-sm">
-                    Cells
-                  </Label>
-                  <div className="flex gap-2">
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm">Cells</h3>
+                  <div className="flex gap-2 p-3 rounded">
                     <Input
                       id="cell"
                       value={componentInput.cell}
@@ -678,37 +795,38 @@ const UserDashboard = () => {
                           cell: e.target.value,
                         })
                       }
-                      onKeyPress={(e) => e.key === "Enter" && addCell()}
-                      placeholder="E.g., Cell-Type-1, Cell-Type-2"
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addCell();
+                        }
+                      }}
+                      placeholder="Enter cell..."
+                      className="border border-gray-400"
                     />
                     <Button type="button" onClick={addCell} variant="outline">
                       Add
                     </Button>
                   </div>
-                  {productForm.cells.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {productForm.cells.map((c, idx) => (
-                        <Badge key={idx} variant="secondary">
-                          {c.name}
-                          <button
-                            type="button"
-                            onClick={() => removeCell(idx)}
-                            className="ml-2 hover:text-red-500"
-                          >
-                            ×
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                    {productForm.cells.map((cell, index) => (
+                      <Badge key={index} variant="secondary">
+                        {cell.name}
+                        <button
+                          type="button"
+                          onClick={() => removeCell(index)}
+                          className="ml-2 hover:text-red-500"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
 
-                {/* Tiers */}
-                <div className="space-y-2">
-                  <Label htmlFor="tier" className="text-sm">
-                    Tiers
-                  </Label>
-                  <div className="flex gap-2">
+                <div className="space-y-3">
+                  <h3 className="font-semibold text-sm">Tiers</h3>
+                  <div className="flex gap-2 p-3 rounded">
                     <Input
                       id="tier"
                       value={componentInput.tier}
@@ -718,54 +836,50 @@ const UserDashboard = () => {
                           tier: e.target.value,
                         })
                       }
-                      onKeyPress={(e) => e.key === "Enter" && addTier()}
-                      placeholder="E.g., Top-Tier, Middle-Tier, Bottom-Tier"
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addTier();
+                        }
+                      }}
+                      placeholder="Enter tier..."
+                      className="border border-gray-400"
                     />
                     <Button type="button" onClick={addTier} variant="outline">
                       Add
                     </Button>
                   </div>
-                  {productForm.tiers.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {productForm.tiers.map((t, idx) => (
-                        <Badge key={idx} variant="secondary">
-                          {t.name}
-                          <button
-                            type="button"
-                            onClick={() => removeTier(idx)}
-                            className="ml-2 hover:text-red-500"
-                          >
-                            ×
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                    {productForm.tiers.map((tier, index) => (
+                      <Badge key={index} variant="secondary">
+                        {tier.name}
+                        <button
+                          type="button"
+                          onClick={() => removeTier(index)}
+                          className="ml-2 hover:text-red-500"
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={productForm.description}
-                  onChange={(e) =>
-                    setProductForm({
-                      ...productForm,
-                      description: e.target.value,
-                    })
-                  }
-                  rows={3}
-                />
-              </div>
+
               <div className="flex justify-end space-x-2 pt-4">
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => setShowProductModal(false)}
+                  onClick={() => {
+                    setShowProductModal(false);
+                    resetProductForm();
+                  }}
                 >
                   Cancel
                 </Button>
-                <Button type="submit">Create Product</Button>
+                <Button type="submit">
+                  {editingProductId ? "Update Product" : "Create Product"}
+                </Button>
               </div>
             </form>
           </DialogContent>
@@ -775,60 +889,70 @@ const UserDashboard = () => {
       {/* Create Batch Modal */}
       {activeTab === "batches" && (
         <Dialog open={showBatchModal} onOpenChange={setShowBatchModal}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Record Production Batch</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleCreateBatch} className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="batchProduct">Product *</Label>
-                <Select
-                  id="batchProduct"
-                  value={batchForm.product_id}
-                  onChange={(e) =>
-                    setBatchForm({ ...batchForm, product_id: e.target.value })
-                  }
-                  required
-                >
-                  <option value="">Select Product</option>
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name} ({formatProductType(product.type)})
-                    </option>
-                  ))}
-                </Select>
+              <div className="grid grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="batchProduct">Product *</Label>
+                  <Select
+                    id="batchProduct"
+                    value={batchForm.product_id}
+                    onChange={(e) =>
+                      setBatchForm({ ...batchForm, product_id: e.target.value })
+                    }
+                    required
+                    className="border border-gray-400"
+                  >
+                    <option value="">Select Product</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} ({formatProductType(product.type)})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="quantity">Quantity Produced *</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    min="1"
+                    value={batchForm.quantity_produced}
+                    onChange={(e) =>
+                      setBatchForm({
+                        ...batchForm,
+                        quantity_produced: e.target.value,
+                      })
+                    }
+                    required
+                    className="border border-gray-400"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="shift">Shift *</Label>
+                  <Select
+                    id="shift"
+                    value={batchForm.shift || getDefaultShift()}
+                    onChange={(e) =>
+                      setBatchForm({ ...batchForm, shift: e.target.value })
+                    }
+                    required
+                    className="border border-gray-400"
+                  >
+                    {shiftOptions.map((shift) => (
+                      <option key={shift.value} value={shift.value}>
+                        {shift.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity Produced *</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  value={batchForm.quantity_produced}
-                  onChange={(e) =>
-                    setBatchForm({
-                      ...batchForm,
-                      quantity_produced: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="shift">Shift *</Label>
-                <Select
-                  id="shift"
-                  value={batchForm.shift || "morning"}
-                  onChange={(e) =>
-                    setBatchForm({ ...batchForm, shift: e.target.value })
-                  }
-                  required
-                >
-                  <option value="morning">Morning</option>
-                  <option value="afternoon">Afternoon</option>
-                  <option value="night">Night</option>
-                </Select>
-              </div>
+
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="startTime">Start Time (HH:MM) *</Label>
@@ -843,6 +967,7 @@ const UserDashboard = () => {
                       })
                     }
                     required
+                    className="border border-gray-400"
                   />
                 </div>
                 <div className="space-y-2">
@@ -858,9 +983,11 @@ const UserDashboard = () => {
                       })
                     }
                     required
+                    className="border border-gray-400"
                   />
                 </div>
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
                 <Textarea
@@ -870,8 +997,10 @@ const UserDashboard = () => {
                     setBatchForm({ ...batchForm, notes: e.target.value })
                   }
                   rows={3}
+                  className="border border-gray-400"
                 />
               </div>
+
               <div className="flex justify-end space-x-2 pt-4">
                 <Button
                   type="button"
