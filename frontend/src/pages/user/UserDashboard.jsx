@@ -322,6 +322,7 @@ const UserDashboard = () => {
         shift: "morning",
         notes: "",
       });
+       
       fetchBatches();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to create batch");

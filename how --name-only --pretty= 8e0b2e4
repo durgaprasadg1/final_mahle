@@ -1,0 +1,16 @@
+backend/.env.example
+backend/config/database.sql
+backend/controllers/templateController.js
+backend/init-db.js
+backend/models/ComponentTemplate.js
+backend/package.json
+backend/routes/templateRoutes.js
+backend/server.js
+frontend/src/App.jsx
+frontend/src/lib/api.js
+frontend/src/pages/admin/AdminDashboard.jsx
+frontend/src/pages/admin/CellTemplates.jsx
+frontend/src/pages/admin/ComponentTemplates.jsx
+frontend/src/pages/admin/FractileTemplates.jsx
+frontend/src/pages/admin/TierTemplates.jsx
+frontend/src/pages/user/UserDashboard.jsx

@@ -74,9 +74,10 @@ function App() {
           />
           <Route path="/" element={<Navigate to="/login" replace />} />
           <Route path="*" element={<Navigate to="/login" replace />} />
-        </Routes>
+        </Routes> 
+        
       </Router>
-      <ToastContainer
+      <ToastContainer 
         position="top-right"
         autoClose={3000}
         hideProgressBar={false}

@@ -95,7 +95,6 @@ class UnitController {
       if (location !== undefined) updateData.location = location;
 
       const updatedUnit = await Unit.update(id, updateData);
-
       res.json({
         success: true,
         message: "Unit updated successfully",
