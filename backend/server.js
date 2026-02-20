@@ -1,6 +1,6 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import pool from "./config/database.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -9,8 +9,6 @@ import unitRoutes from "./routes/unitRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
 import templateRoutes from "./routes/templateRoutes.js";
-
-dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 5000;
