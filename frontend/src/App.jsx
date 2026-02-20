@@ -16,6 +16,7 @@ import FractileTemplates from "./pages/admin/FractileTemplates";
 import CellTemplates from "./pages/admin/CellTemplates";
 import TierTemplates from "./pages/admin/TierTemplates";
 import UserDashboard from "./pages/user/UserDashboard";
+import AddProduct from "./pages/user/AddProduct";
 import "./index.css";
 
 function App() {
@@ -33,42 +34,18 @@ function App() {
             }
           />
           <Route
+            path="/admin/shifts/create"
+            element={
+              <ProtectedRoute adminOnly>
+                <ShiftCreator />
+              </ProtectedRoute>
+            }
+          />
+          <Route
             path="/dashboard"
             element={
               <ProtectedRoute>
                 <UserDashboard />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/templates"
-            element={
-              <ProtectedRoute>
-                <ComponentTemplates />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/templates/fractiles"
-            element={
-              <ProtectedRoute>
-                <FractileTemplates />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/templates/cells"
-            element={
-              <ProtectedRoute>
-                <CellTemplates />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/templates/tiers"
-            element={
-              <ProtectedRoute>
-                <TierTemplates />
               </ProtectedRoute>
             }
           />
