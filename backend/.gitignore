@@ -4,3 +4,5 @@ node_modules/
 *.log
 dist/
 build/
+apply-schema.js
+create-db.js
