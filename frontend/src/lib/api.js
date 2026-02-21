@@ -110,4 +110,13 @@ export const batchAPI = {
     api.get(`/batches/unit/${unitId}/statistics`, { params }),
 };
 
+// Shift API
+export const shiftAPI = {
+  create: (shiftData) => api.post("/shifts", shiftData),
+  getAll: (params) => api.get("/shifts", { params }),
+  getById: (id) => api.get(`/shifts/${id}`),
+  update: (id, data) => api.put(`/shifts/${id}`, data),
+  delete: (id) => api.delete(`/shifts/${id}`),
+};
+
 export default api;

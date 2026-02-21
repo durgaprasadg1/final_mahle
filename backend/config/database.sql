@@ -146,6 +146,31 @@ CREATE TABLE batches (
     CONSTRAINT batch_in_shift_positive CHECK (batch_in_shift > 0)
 );
 
+-- Shifts Table (optional per-unit)
+CREATE TABLE shifts (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL,
+    start_time TIME,
+    end_time TIME,
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = CURRENT_TIMESTAMP;
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER update_shifts_updated_at BEFORE UPDATE ON shifts 
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
 
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_unit ON users(unit_id);
@@ -172,15 +197,6 @@ INSERT INTO units (name, code, description, location) VALUES
 
 INSERT INTO users (email, password, name, role, status, permissions) VALUES 
 ('admin@mahle.com', '$2a$10$K8zX6aJ3yYqX3X3X3X3X3.rJ/k8Kx8J8Kx8J8Kx8J8Kx8J8Kx8J8K', 'System Administrator', 'admin', 'active', 'create,read,update,delete');
-
-
-CREATE OR REPLACE FUNCTION update_updated_at_column()
-RETURNS TRIGGER AS $$
-BEGIN
-    NEW.updated_at = CURRENT_TIMESTAMP;
-    RETURN NEW;
-END;
-$$ LANGUAGE plpgsql;
 
 
 CREATE TRIGGER update_units_updated_at BEFORE UPDATE ON units 
