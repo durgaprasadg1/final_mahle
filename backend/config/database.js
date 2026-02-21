@@ -4,8 +4,7 @@ import dotenv from "dotenv";
 dotenv.config();
 
 const { Pool } = pg;
-const p = process.env.DB_PASSWORD
-
+console.log("🔍 Database password:", process.env.DB_PASSWORD);
 
 const pool = new Pool({
   host: process.env.DB_HOST,

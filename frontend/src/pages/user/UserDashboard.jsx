@@ -38,6 +38,8 @@ import {
   Edit,
   Trash2,
 } from "lucide-react";
+import { formatDate, formatProductType, formatTime } from "../../lib/utils";
+import { Link } from "react-router-dom";
 import { formatProductType, formatTime } from "../../lib/utils";
 
 const UserDashboard = () => {
@@ -70,6 +72,55 @@ const UserDashboard = () => {
     cell: "",
     tier: "",
   });
+  const [componentSelect, setComponentSelect] = useState({
+    fractileSelect: "",
+    cellSelect: "",
+    tierSelect: "",
+  });
+  const [showCustom, setShowCustom] = useState({
+    fractile: false,
+    cell: false,
+    tier: false,
+  });
+
+  const [fractileOptions, setFractileOptions] = useState([
+    "Fractile-A",
+    "Fractile-B",
+    "Fractile-C",
+    "Fractile-D",
+    "Fractile-E",
+  ]);
+  const [cellOptions, setCellOptions] = useState([
+    "Cell-Type-1",
+    "Cell-Type-2",
+    "Cell-Type-3",
+    "Cell-Type-4",
+  ]);
+  const [tierOptions, setTierOptions] = useState([
+    "Top-Tier",
+    "Middle-Tier",
+    "Bottom-Tier",
+  ]);
+
+  const fetchComponentTemplates = async () => {
+    try {
+      const api = await import("../../lib/api");
+      const [fRes, cRes, tRes] = await Promise.all([
+        api.templateAPI.list("fractiles"),
+        api.templateAPI.list("cells"),
+        api.templateAPI.list("tiers"),
+      ]);
+      setFractileOptions(fRes.data.data.map((r) => r.name));
+      setCellOptions(cRes.data.data.map((r) => r.name));
+      setTierOptions(tRes.data.data.map((r) => r.name));
+    } catch (e) {
+      // keep defaults if backend unavailable
+    }
+  };
+
+  useEffect(() => {
+    fetchComponentTemplates();
+  }, []);
 
   const [batchForm, setBatchForm] = useState({
     product_id: "",
@@ -183,35 +234,41 @@ const UserDashboard = () => {
   };
 
   const addFractile = () => {
-    if (componentInput.fractile.trim()) {
+    const value = componentInput.fractile.trim();
+    if (value) {
       setProductForm({
         ...productForm,
-        fractiles: [
-          ...productForm.fractiles,
-          { name: componentInput.fractile, count: 0 },
-        ],
+        fractiles: [...productForm.fractiles, { name: value, count: 0 }],
       });
       setComponentInput({ ...componentInput, fractile: "" });
+      setShowCustom({ ...showCustom, fractile: false });
+      setComponentSelect({ ...componentSelect, fractileSelect: "" });
     }
   };
 
   const addCell = () => {
-    if (componentInput.cell.trim()) {
+    const value = componentInput.cell.trim();
+    if (value) {
       setProductForm({
         ...productForm,
-        cells: [...productForm.cells, { name: componentInput.cell, count: 0 }],
+        cells: [...productForm.cells, { name: value, count: 0 }],
       });
       setComponentInput({ ...componentInput, cell: "" });
+      setShowCustom({ ...showCustom, cell: false });
+      setComponentSelect({ ...componentSelect, cellSelect: "" });
     }
   };
 
   const addTier = () => {
-    if (componentInput.tier.trim()) {
+    const value = componentInput.tier.trim();
+    if (value) {
       setProductForm({
         ...productForm,
-        tiers: [...productForm.tiers, { name: componentInput.tier, count: 0 }],
+        tiers: [...productForm.tiers, { name: value, count: 0 }],
       });
       setComponentInput({ ...componentInput, tier: "" });
+      setShowCustom({ ...showCustom, tier: false });
+      setComponentSelect({ ...componentSelect, tierSelect: "" });
     }
   };
 
@@ -234,6 +291,20 @@ const UserDashboard = () => {
       ...productForm,
       tiers: productForm.tiers.filter((_, i) => i !== index),
     });
+  };
+
+  const handleEditProduct = (product) => {
+    setIsEditMode(true);
+    setEditingProductId(product.id);
+    setProductForm({
+      name: product.name,
+      type: product.type,
+      description: product.description || "",
+      fractiles: Array.isArray(product.fractiles) ? product.fractiles : [],
+      cells: Array.isArray(product.cells) ? product.cells : [],
+      tiers: Array.isArray(product.tiers) ? product.tiers : [],
+    });
+    setShowProductModal(true);
   };
 
   const resetProductForm = () => {
@@ -275,6 +346,14 @@ const UserDashboard = () => {
         tiers: productForm.tiers,
       };
 
+      if (isEditMode && editingProductId) {
+        await productAPI.update(editingProductId, payload);
+        toast.success("Product updated successfully");
+      } else {
+        await productAPI.create(payload);
+        toast.success("Product created successfully");
+      }
+
       if (editingProductId) {
         await productAPI.update(editingProductId, payload);
         toast.success("Product updated successfully");
@@ -287,6 +366,10 @@ const UserDashboard = () => {
       resetProductForm();
       fetchProducts();
     } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+          `Failed to ${isEditMode ? "update" : "create"} product`,
+      );
       toast.error(
         error.response?.data?.message ||
           `Failed to ${editingProductId ? "update" : "create"} product`,
@@ -478,6 +561,21 @@ const UserDashboard = () => {
                   </CardDescription>
                 </div>
                 {user?.permissions?.create && (
+                  <div className="flex items-center gap-2">
+                    <Button onClick={() => setShowProductModal(true)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      Add Product
+                    </Button>
+                    <Link to="/templates/fractiles">
+                      <Button variant="outline">Manage Fractiles</Button>
+                    </Link>
+                    <Link to="/templates/cells">
+                      <Button variant="outline">Manage Cells</Button>
+                    </Link>
+                    <Link to="/templates/tiers">
+                      <Button variant="outline">Manage Tiers</Button>
+                    </Link>
+                  </div>
                   <Button 
                     onClick={() => {
                       resetProductForm();
@@ -502,7 +600,7 @@ const UserDashboard = () => {
                       <TableHead>Name</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Components</TableHead>
-                      <TableHead>Created</TableHead>
+                      <TableHead>Created By</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -589,9 +687,38 @@ const UserDashboard = () => {
                             )}
                           </TableCell>
                           <TableCell>
-                            {new Date(product.created_at).toLocaleDateString()}
+                            <div className="text-sm">
+                              {product.created_by_name || "Unknown"}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {new Date(
+                                product.created_at,
+                              ).toLocaleDateString()}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right">
+                            <div className="flex justify-end space-x-2">
+                              {user?.permissions?.update && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleEditProduct(product)}
+                                >
+                                  <Edit className="w-4 h-4 text-blue-600" />
+                                </Button>
+                              )}
+                              {user?.permissions?.delete && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() =>
+                                    handleDeleteProduct(product.id)
+                                  }
+                                >
+                                  <Trash2 className="w-4 h-4 text-red-600" />
+                                </Button>
+                              )}
+                            </div>
                             {user?.permissions?.update && (
                               <Button
                                 size="sm"
@@ -654,6 +781,7 @@ const UserDashboard = () => {
                     <TableHead>Start Time</TableHead>
                     <TableHead>Duration</TableHead>
                     <TableHead>Status</TableHead>
+                    <TableHead>Created By</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -671,6 +799,14 @@ const UserDashboard = () => {
                       <TableCell>
                         <Badge variant="success">{batch.status}</Badge>
                       </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          {batch.created_by_name || "Unknown"}
+                        </div>
+                        <div className="text-xs text-gray-400">
+                          {new Date(batch.created_at).toLocaleDateString()}
+                        </div>
+                      </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
@@ -680,15 +816,78 @@ const UserDashboard = () => {
         )}
       </main>
 
-      {/* Create Product Modal */}
+      {/* Create/Edit Product Modal */}
       {activeTab === "products" && (
+        <Dialog
+          open={showProductModal}
+          onOpenChange={(open) => {
+            setShowProductModal(open);
+            if (!open) {
+              setIsEditMode(false);
+              setEditingProductId(null);
+              setProductForm({
+                name: "",
+                type: "",
+                description: "",
+                fractiles: [],
+                cells: [],
+                tiers: [],
+              });
+              setComponentInput({ fractile: "", cell: "", tier: "" });
+            }
+          }}
+        >
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <Dialog open={showProductModal} onOpenChange={setShowProductModal}>
           <DialogContent className="w-full max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
+                {isEditMode ? "Edit Product" : "Add New Product"}
+              </DialogTitle>
+              <DialogTitle>
                 {editingProductId ? "Update Product" : "Add New Product"}
               </DialogTitle>
             </DialogHeader>
+            <form onSubmit={handleCreateProduct} className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label htmlFor="productName">Product Name *</Label>
+                <Input
+                  id="productName"
+                  value={productForm.name}
+                  onChange={(e) =>
+                    setProductForm({ ...productForm, name: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="productType">Product Type *</Label>
+                <Select
+                  id="productType"
+                  value={productForm.type}
+                  onChange={(e) =>
+                    setProductForm({ ...productForm, type: e.target.value })
+                  }
+                  required
+                >
+                  <option value="">Select Type</option>
+                  {productTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {formatProductType(type)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="space-y-4 border-t pt-4">
+                <Label className="text-base font-semibold">Components</Label>
+
+                {/* Fractiles */}
+                <div className="space-y-2">
+                  <Label htmlFor="fractile" className="text-sm">
+                    Fractiles
+                  </Label>
+                  <div className="flex gap-2">
+                    <Select
             <form onSubmit={handleCreateProduct} className="space-y-6 mt-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2 p-3 rounded">
@@ -747,6 +946,38 @@ const UserDashboard = () => {
                   <div className="flex gap-2 p-3 rounded">
                     <Input
                       id="fractile"
+                      value={componentSelect.fractileSelect}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "create_new") {
+                          setShowCustom({ ...showCustom, fractile: true });
+                          setComponentSelect({
+                            ...componentSelect,
+                            fractileSelect: "",
+                          });
+                        } else if (val) {
+                          setProductForm({
+                            ...productForm,
+                            fractiles: [
+                              ...productForm.fractiles,
+                              { name: val, count: 0 },
+                            ],
+                          });
+                          setComponentSelect({
+                            ...componentSelect,
+                            fractileSelect: "",
+                          });
+                        }
+                      }}
+                    >
+                      <option value="">Select Fractile</option>
+                      {fractileOptions.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </Select>
+                    
                       value={componentInput.fractile}
                       onChange={(e) =>
                         setComponentInput({
@@ -783,11 +1014,50 @@ const UserDashboard = () => {
                   </div>
                 </div>
 
+                {/* Cells */}
+                <div className="space-y-2">
+                  <Label htmlFor="cell" className="text-sm">
+                    Cells
+                  </Label>
+                  <div className="flex gap-2">
+                    <Select
                 <div className="space-y-3">
                   <h3 className="font-semibold text-sm">Cells</h3>
                   <div className="flex gap-2 p-3 rounded">
                     <Input
                       id="cell"
+                      value={componentSelect.cellSelect}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "create_new") {
+                          setShowCustom({ ...showCustom, cell: true });
+                          setComponentSelect({
+                            ...componentSelect,
+                            cellSelect: "",
+                          });
+                        } else if (val) {
+                          setProductForm({
+                            ...productForm,
+                            cells: [
+                              ...productForm.cells,
+                              { name: val, count: 0 },
+                            ],
+                          });
+                          setComponentSelect({
+                            ...componentSelect,
+                            cellSelect: "",
+                          });
+                        }
+                      }}
+                    >
+                      <option value="">Select Cell</option>
+                      {cellOptions.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </Select>
+                    
                       value={componentInput.cell}
                       onChange={(e) =>
                         setComponentInput({
@@ -829,6 +1099,38 @@ const UserDashboard = () => {
                   <div className="flex gap-2 p-3 rounded">
                     <Input
                       id="tier"
+                      value={componentSelect.tierSelect}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "create_new") {
+                          setShowCustom({ ...showCustom, tier: true });
+                          setComponentSelect({
+                            ...componentSelect,
+                            tierSelect: "",
+                          });
+                        } else if (val) {
+                          setProductForm({
+                            ...productForm,
+                            tiers: [
+                              ...productForm.tiers,
+                              { name: val, count: 0 },
+                            ],
+                          });
+                          setComponentSelect({
+                            ...componentSelect,
+                            tierSelect: "",
+                          });
+                        }
+                      }}
+                    >
+                      <option value="">Select Tier</option>
+                      {tierOptions.map((o) => (
+                        <option key={o} value={o}>
+                          {o}
+                        </option>
+                      ))}
+                    </Select>
+                    
                       value={componentInput.tier}
                       onChange={(e) =>
                         setComponentInput({
@@ -876,6 +1178,9 @@ const UserDashboard = () => {
                   }}
                 >
                   Cancel
+                </Button>
+                <Button type="submit">
+                  {isEditMode ? "Update Product" : "Create Product"}
                 </Button>
                 <Button type="submit">
                   {editingProductId ? "Update Product" : "Create Product"}

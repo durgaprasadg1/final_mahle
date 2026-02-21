@@ -1,6 +1,6 @@
+import "dotenv/config";
 import express from "express";
 import cors from "cors";
-import dotenv from "dotenv";
 import pool from "./config/database.js";
 import { errorHandler, notFound } from "./middleware/errorHandler.js";
 import authRoutes from "./routes/authRoutes.js";
@@ -8,9 +8,7 @@ import userRoutes from "./routes/userRoutes.js";
 import unitRoutes from "./routes/unitRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
-import shiftRoutes from "./routes/shiftRoutes.js";
-
-dotenv.config();
+import templateRoutes from "./routes/templateRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -32,13 +30,13 @@ app.use("/api/users", userRoutes);
 app.use("/api/units", unitRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/batches", batchRoutes);
-app.use("/api/shifts", shiftRoutes);
+app.use("/api/templates", templateRoutes);
 
 app.use(notFound);
 app.use(errorHandler);
 
 app.listen(PORT, () => {
-    console.log(`backend running on port ${PORT}`);
+  console.log(`backend running on port ${PORT}`);
 });
 
 process.on("unhandledRejection", (err) => {

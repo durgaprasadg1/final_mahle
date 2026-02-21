@@ -97,6 +97,34 @@ CREATE TABLE product_tiers (
     CONSTRAINT unique_product_tier UNIQUE(product_id, name)
 );
 
+-- Templates for reusable components (global)
+CREATE TABLE fractile_templates (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE cell_templates (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE tier_templates (
+    id SERIAL PRIMARY KEY,
+    name VARCHAR(100) NOT NULL UNIQUE,
+    description TEXT,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE batches (
     id SERIAL PRIMARY KEY,
     batch_number VARCHAR(50) NOT NULL UNIQUE,
@@ -181,6 +209,15 @@ CREATE TRIGGER update_products_updated_at BEFORE UPDATE ON products
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_batches_updated_at BEFORE UPDATE ON batches 
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_fractile_templates_updated_at BEFORE UPDATE ON fractile_templates
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_cell_templates_updated_at BEFORE UPDATE ON cell_templates
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_tier_templates_updated_at BEFORE UPDATE ON tier_templates
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 

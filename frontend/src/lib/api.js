@@ -86,6 +86,16 @@ export const productAPI = {
   delete: (id) => api.delete(`/products/${id}`),
   getByUnit: (unitId) => api.get(`/products/unit/${unitId}`),
   getTypes: () => api.get("/products/types"),
+  getTemplates: (params) => api.get("/templates", { params }),
+  createTemplate: (type, data) => api.post(`/templates/${type}`, data),
+};
+
+// Component templates API (fractiles, cells, tiers)
+export const templateAPI = {
+  list: (type) => api.get(`/templates/${type}`),
+  create: (type, data) => api.post(`/templates/${type}`, data),
+  update: (type, id, data) => api.put(`/templates/${type}/${id}`, data),
+  delete: (type, id) => api.delete(`/templates/${type}/${id}`),
 };
 
 // Batch API
