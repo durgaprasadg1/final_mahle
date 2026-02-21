@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { userAPI, unitAPI } from "../../lib/api";
 import ShiftDashboard from "./ShiftDashboard";
@@ -37,15 +38,15 @@ import {
   LogOut,
   UserCheck,
   UserX,
-  Edit,
   Trash2,
   Eye,
 } from "lucide-react";
 
 const AdminDashboard = () => {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const [users, setUsers] = useState([]);
   const [units, setUnits] = useState([]);
+  
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
@@ -69,6 +70,7 @@ const AdminDashboard = () => {
     fetchUsers();
     fetchUnits();
   }, []);
+
 
   const fetchUsers = async () => {
     try {
@@ -345,7 +347,10 @@ const AdminDashboard = () => {
             )}
           </CardContent>
         </Card>
+        
       </main>
+
+      
 
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
         <DialogContent>
@@ -523,6 +528,43 @@ const AdminDashboard = () => {
                 </label>
               </div>
             </div>
+
+            <div className="space-y-3">
+              <div className="text-center">
+                <Label>Permissions</Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Choose what this user can do in their assigned unit.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {permissionOptions.map((permission) => (
+                  <label
+                    key={permission.key}
+                    className="flex items-start gap-3 rounded-md border p-3 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formData.permissions[permission.key]}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          permissions: {
+                            ...formData.permissions,
+                            [permission.key]: e.target.checked,
+                          },
+                        })
+                      }
+                      className="mt-0.5 rounded"
+                    />
+                    <div>
+                      <p className="text-sm font-medium">{permission.label}</p>
+                      <p className="text-xs text-muted-foreground">{permission.hint}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="flex justify-end space-x-2 pt-4">
               <Button
                 type="button"
@@ -536,6 +578,8 @@ const AdminDashboard = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+        
 
       <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
         <DialogContent>
