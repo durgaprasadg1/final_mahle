@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "../../components/ui/dialog";
 import { toast } from "react-toastify";
+import { useNavigate } from "react-router-dom";
 
 const types = ["fractiles", "cells", "tiers"];
 
@@ -28,6 +29,7 @@ const ComponentTemplates = ({ initialType = "fractiles" }) => {
   const [showModal, setShowModal] = useState(false);
   const [editItem, setEditItem] = useState(null);
   const [form, setForm] = useState({ name: "", description: "" });
+ const navigate = useNavigate();
 
   useEffect(() => {
     fetchList();
@@ -93,9 +95,12 @@ const ComponentTemplates = ({ initialType = "fractiles" }) => {
   return (
     <div className="p-6">
       <h2 className="text-xl font-bold mb-4">Component Templates</h2>
+      
       <div className="mb-4 flex gap-2">
+      <Button className="bg-sky-400 hover:bg-sky-500" onClick={() => navigate('/dashboard')}> Wapasi </Button>
+
         {types.map((t) => (
-          <Button
+          <Button className="capitalize bg-teal-500" 
             key={t}
             variant={t === activeType ? "default" : "outline"}
             onClick={() => setActiveType(t)}
