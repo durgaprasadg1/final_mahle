@@ -291,6 +291,15 @@ const UserDashboard = () => {
 
   const handleCreateProduct = async (e) => {
     e.preventDefault();
+    // Client-side validations for product
+    if (!productForm.name.trim()) {
+      toast.error("Product name is required");
+      return;
+    }
+    if (!productForm.type) {
+      toast.error("Please select a product type");
+      return;
+    }
     try {
       const payload = {
         name: productForm.name,
@@ -333,6 +342,25 @@ const UserDashboard = () => {
   const handleCreateBatch = async (e) => {
     e.preventDefault();
     try {
+      // Client-side validations for batch
+      if (!batchForm.product_id) {
+        toast.error("Please select a product for the batch");
+        return;
+      }
+      const qty = parseInt(batchForm.quantity_produced, 10);
+      if (!Number.isFinite(qty) || qty < 1) {
+        toast.error("Quantity produced must be at least 1");
+        return;
+      }
+      if (!batchForm.start_time || !batchForm.end_time) {
+        toast.error("Start time and end time are required");
+        return;
+      }
+      // allow end < start (cross-midnight), but disallow equal times
+      if (batchForm.start_time === batchForm.end_time) {
+        toast.error("End time must be different from start time");
+        return;
+      }
       const toTimeString = (timeValue) => {
         if (!timeValue) return null;
         return timeValue.length === 5 ? `${timeValue}:00` : timeValue;
@@ -405,7 +433,8 @@ const UserDashboard = () => {
 
       const matchedSlot = slots.find(
         (slot) =>
-          slot.startTime === batch.start_time && slot.endTime === batch.end_time,
+          slot.startTime === batch.start_time &&
+          slot.endTime === batch.end_time,
       );
       setSelectedBatchSlot(matchedSlot?.value || "");
     }
@@ -421,9 +450,7 @@ const UserDashboard = () => {
       toast.success("Batch deleted successfully");
       fetchBatches();
     } catch (error) {
-      toast.error(
-        error.response?.data?.message || "Failed to delete batch"
-      );
+      toast.error(error.response?.data?.message || "Failed to delete batch");
     }
   };
 
@@ -539,7 +566,9 @@ const UserDashboard = () => {
     const config =
       shiftConfigs.find((s) => String(s.id) === String(shiftIdentifier)) ||
       shiftConfigs.find((s) => s.backendShift === shiftIdentifier) ||
-      DEFAULT_SHIFT_CONFIGS.find((s) => String(s.id) === String(shiftIdentifier)) ||
+      DEFAULT_SHIFT_CONFIGS.find(
+        (s) => String(s.id) === String(shiftIdentifier),
+      ) ||
       DEFAULT_SHIFT_CONFIGS.find((s) => s.backendShift === shiftIdentifier) ||
       DEFAULT_SHIFT_CONFIGS[0];
 
@@ -598,7 +627,11 @@ const UserDashboard = () => {
 
     const creatorId = product.created_by || product.createdBy;
     const currentUserId = user?.id || user?.user_id;
-    if (creatorId && currentUserId && Number(creatorId) === Number(currentUserId)) {
+    if (
+      creatorId &&
+      currentUserId &&
+      Number(creatorId) === Number(currentUserId)
+    ) {
       return user?.name || "You";
     }
 
@@ -616,7 +649,11 @@ const UserDashboard = () => {
 
     const creatorId = batch.created_by || batch.createdBy;
     const currentUserId = user?.id || user?.user_id;
-    if (creatorId && currentUserId && Number(creatorId) === Number(currentUserId)) {
+    if (
+      creatorId &&
+      currentUserId &&
+      Number(creatorId) === Number(currentUserId)
+    ) {
       return user?.name || "You";
     }
 
@@ -884,7 +921,9 @@ const UserDashboard = () => {
                             )}
                           </TableCell>
                           <TableCell>
-                            <div className="text-sm">{getProductCreatorName(product)}</div>
+                            <div className="text-sm">
+                              {getProductCreatorName(product)}
+                            </div>
                             <div className="text-xs text-gray-400">
                               {new Date(
                                 product.created_at,
@@ -1073,177 +1112,174 @@ const UserDashboard = () => {
               <div className="space-y-4 border-t pt-4">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                  <Label htmlFor="fractile" className="text-sm">
-                    Fractiles
-                  </Label>
-                  <div className="flex gap-2">
-                    <Select
-                      id="fractile"
-                      value={componentSelect.fractileSelect}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === "create_new") {
-                          setShowCustom({ ...showCustom, fractile: true });
-                          setComponentSelect({
-                            ...componentSelect,
-                            fractileSelect: "",
-                          });
-                        } else if (val) {
-                          setProductForm({
-                            ...productForm,
-                            fractiles: [
-                              ...productForm.fractiles,
-                              { name: val, count: 0 },
-                            ],
-                          });
-                          setComponentSelect({
-                            ...componentSelect,
-                            fractileSelect: "",
-                          });
-                        }
-                      }}
-                    >
-                      <option value="">Select Fractile</option>
-                      {fractileOptions.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </Select>
-                    
-                  </div>
+                    <Label htmlFor="fractile" className="text-sm">
+                      Fractiles
+                    </Label>
+                    <div className="flex gap-2">
+                      <Select
+                        id="fractile"
+                        value={componentSelect.fractileSelect}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "create_new") {
+                            setShowCustom({ ...showCustom, fractile: true });
+                            setComponentSelect({
+                              ...componentSelect,
+                              fractileSelect: "",
+                            });
+                          } else if (val) {
+                            setProductForm({
+                              ...productForm,
+                              fractiles: [
+                                ...productForm.fractiles,
+                                { name: val, count: 0 },
+                              ],
+                            });
+                            setComponentSelect({
+                              ...componentSelect,
+                              fractileSelect: "",
+                            });
+                          }
+                        }}
+                      >
+                        <option value="">Select Fractile</option>
+                        {fractileOptions.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
                     {productForm.fractiles.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {productForm.fractiles.map((f, idx) => (
-                        <Badge key={idx} variant="secondary">
-                          {f.name}
-                          <button
-                            type="button"
-                            onClick={() => removeFractile(idx)}
-                            className="ml-2 hover:text-red-500"
-                          >
-                            ×
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {productForm.fractiles.map((f, idx) => (
+                          <Badge key={idx} variant="secondary">
+                            {f.name}
+                            <button
+                              type="button"
+                              onClick={() => removeFractile(idx)}
+                              className="ml-2 hover:text-red-500"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
-                  <Label htmlFor="cell" className="text-sm">
-                    Cells
-                  </Label>
-                  <div className="flex gap-2">
-                    <Select
-                      id="cell"
-                      value={componentSelect.cellSelect}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === "create_new") {
-                          setShowCustom({ ...showCustom, cell: true });
-                          setComponentSelect({
-                            ...componentSelect,
-                            cellSelect: "",
-                          });
-                        } else if (val) {
-                          setProductForm({
-                            ...productForm,
-                            cells: [
-                              ...productForm.cells,
-                              { name: val, count: 0 },
-                            ],
-                          });
-                          setComponentSelect({
-                            ...componentSelect,
-                            cellSelect: "",
-                          });
-                        }
-                      }}
-                    >
-                      <option value="">Select Cell</option>
-                      {cellOptions.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </Select>
-                    
-                  </div>
+                    <Label htmlFor="cell" className="text-sm">
+                      Cells
+                    </Label>
+                    <div className="flex gap-2">
+                      <Select
+                        id="cell"
+                        value={componentSelect.cellSelect}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "create_new") {
+                            setShowCustom({ ...showCustom, cell: true });
+                            setComponentSelect({
+                              ...componentSelect,
+                              cellSelect: "",
+                            });
+                          } else if (val) {
+                            setProductForm({
+                              ...productForm,
+                              cells: [
+                                ...productForm.cells,
+                                { name: val, count: 0 },
+                              ],
+                            });
+                            setComponentSelect({
+                              ...componentSelect,
+                              cellSelect: "",
+                            });
+                          }
+                        }}
+                      >
+                        <option value="">Select Cell</option>
+                        {cellOptions.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
                     {productForm.cells.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {productForm.cells.map((c, idx) => (
-                        <Badge key={idx} variant="secondary">
-                          {c.name}
-                          <button
-                            type="button"
-                            onClick={() => removeCell(idx)}
-                            className="ml-2 hover:text-red-500"
-                          >
-                            ×
-                          </button>
-                        </Badge>
-                      ))}
-                    </div>
-                  )}
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {productForm.cells.map((c, idx) => (
+                          <Badge key={idx} variant="secondary">
+                            {c.name}
+                            <button
+                              type="button"
+                              onClick={() => removeCell(idx)}
+                              className="ml-2 hover:text-red-500"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
 
                   <div className="space-y-2">
-                  <Label htmlFor="tier" className="text-sm">
-                    Tiers
-                  </Label>
-                  <div className="flex gap-2">
-                    <Select
-                      id="tier"
-                      value={componentSelect.tierSelect}
-                      onChange={(e) => {
-                        const val = e.target.value;
-                        if (val === "create_new") {
-                          setShowCustom({ ...showCustom, tier: true });
-                          setComponentSelect({
-                            ...componentSelect,
-                            tierSelect: "",
-                          });
-                        } else if (val) {
-                          setProductForm({
-                            ...productForm,
-                            tiers: [
-                              ...productForm.tiers,
-                              { name: val, count: 0 },
-                            ],
-                          });
-                          setComponentSelect({
-                            ...componentSelect,
-                            tierSelect: "",
-                          });
-                        }
-                      }}
-                    >
-                      <option value="">Select Tier</option>
-                      {tierOptions.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </Select>
-                    
-                  </div>
-                    {productForm.tiers.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
-                      {productForm.tiers.map((t, idx) => (
-                        <Badge key={idx} variant="secondary">
-                          {t.name}
-                          <button
-                            type="button"
-                            onClick={() => removeTier(idx)}
-                            className="ml-2 hover:text-red-500"
-                          >
-                            ×
-                          </button>
-                        </Badge>
-                      ))}
+                    <Label htmlFor="tier" className="text-sm">
+                      Tiers
+                    </Label>
+                    <div className="flex gap-2">
+                      <Select
+                        id="tier"
+                        value={componentSelect.tierSelect}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "create_new") {
+                            setShowCustom({ ...showCustom, tier: true });
+                            setComponentSelect({
+                              ...componentSelect,
+                              tierSelect: "",
+                            });
+                          } else if (val) {
+                            setProductForm({
+                              ...productForm,
+                              tiers: [
+                                ...productForm.tiers,
+                                { name: val, count: 0 },
+                              ],
+                            });
+                            setComponentSelect({
+                              ...componentSelect,
+                              tierSelect: "",
+                            });
+                          }
+                        }}
+                      >
+                        <option value="">Select Tier</option>
+                        {tierOptions.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </Select>
                     </div>
-                  )}
+                    {productForm.tiers.length > 0 && (
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        {productForm.tiers.map((t, idx) => (
+                          <Badge key={idx} variant="secondary">
+                            {t.name}
+                            <button
+                              type="button"
+                              onClick={() => removeTier(idx)}
+                              className="ml-2 hover:text-red-500"
+                            >
+                              ×
+                            </button>
+                          </Badge>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1330,9 +1366,13 @@ const UserDashboard = () => {
                     <label
                       key={`${shiftConfig.id}-${shiftConfig.backendShift}`}
                       className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer ${
-                        (selectedShiftConfigId
-                          ? String(selectedShiftConfigId) === String(shiftConfig.id)
-                          : (batchForm.shift || "morning") === shiftConfig.backendShift)
+                        (
+                          selectedShiftConfigId
+                            ? String(selectedShiftConfigId) ===
+                              String(shiftConfig.id)
+                            : (batchForm.shift || "morning") ===
+                              shiftConfig.backendShift
+                        )
                           ? "border-primary bg-primary/5"
                           : "border-gray-200"
                       }`}
@@ -1343,13 +1383,18 @@ const UserDashboard = () => {
                         value={shiftConfig.id}
                         checked={
                           selectedShiftConfigId
-                            ? String(selectedShiftConfigId) === String(shiftConfig.id)
+                            ? String(selectedShiftConfigId) ===
+                              String(shiftConfig.id)
                             : (batchForm.shift || "morning") ===
                               shiftConfig.backendShift
                         }
-                        onChange={() => applyShiftConfigToBatchForm(shiftConfig.id)}
+                        onChange={() =>
+                          applyShiftConfigToBatchForm(shiftConfig.id)
+                        }
                       />
-                      <span className="text-sm">{getShiftLabel(shiftConfig)}</span>
+                      <span className="text-sm">
+                        {getShiftLabel(shiftConfig)}
+                      </span>
                     </label>
                   ))}
                 </div>
@@ -1385,7 +1430,8 @@ const UserDashboard = () => {
                   ))}
                 </Select>
                 <p className="text-xs text-gray-500">
-                  Slot list is auto-generated from admin shift timing and interval.
+                  Slot list is auto-generated from admin shift timing and
+                  interval.
                 </p>
               </div>
               <div className="space-y-2">

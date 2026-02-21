@@ -92,6 +92,24 @@ const AdminDashboard = () => {
 
   const handleCreateUser = async (e) => {
     e.preventDefault();
+    // Basic client-side validations
+    if (!formData.name.trim()) {
+      toast.error("Full name is required");
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(formData.email)) {
+      toast.error("Please enter a valid email address");
+      return;
+    }
+    if (!formData.password || formData.password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    if (!formData.unit_id) {
+      toast.error("Please select a manufacturing unit");
+      return;
+    }
     try {
       await userAPI.create(formData);
       toast.success("User created successfully");
@@ -160,8 +178,8 @@ const AdminDashboard = () => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <Button 
-                variant="outline" 
+              <Button
+                variant="outline"
                 size="sm"
                 onClick={() => setCurrentView("shift")}
               >
@@ -173,7 +191,7 @@ const AdminDashboard = () => {
                 </p>
                 <p className="text-xs text-gray-500">{user?.email}</p>
               </div>
-              
+
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
@@ -452,7 +470,9 @@ const AdminDashboard = () => {
                   />
                   <div>
                     <span className="text-sm font-medium">Read</span>
-                    <p className="text-xs text-gray-500">View assigned records</p>
+                    <p className="text-xs text-gray-500">
+                      View assigned records
+                    </p>
                   </div>
                 </label>
 
@@ -474,7 +494,9 @@ const AdminDashboard = () => {
                   />
                   <div>
                     <span className="text-sm font-medium">Update</span>
-                    <p className="text-xs text-gray-500">Edit existing records</p>
+                    <p className="text-xs text-gray-500">
+                      Edit existing records
+                    </p>
                   </div>
                 </label>
 
