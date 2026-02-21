@@ -16,6 +16,7 @@ import FractileTemplates from "./pages/admin/FractileTemplates";
 import CellTemplates from "./pages/admin/CellTemplates";
 import TierTemplates from "./pages/admin/TierTemplates";
 import UserDashboard from "./pages/user/UserDashboard";
+import AddProduct from "./pages/user/AddProduct";
 import "./index.css";
 
 function App() {
@@ -29,6 +30,14 @@ function App() {
             element={
               <ProtectedRoute adminOnly>
                 <AdminDashboard />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/shifts/create"
+            element={
+              <ProtectedRoute adminOnly>
+                <ShiftCreator />
               </ProtectedRoute>
             }
           />

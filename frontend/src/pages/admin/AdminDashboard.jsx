@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { useAuth } from "../../contexts/AuthContext";
 import { userAPI, unitAPI } from "../../lib/api";
+import ShiftDashboard from "./ShiftDashboard";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -36,19 +38,20 @@ import {
   LogOut,
   UserCheck,
   UserX,
-  Edit,
   Trash2,
   Eye,
 } from "lucide-react";
 
 const AdminDashboard = () => {
-  const { user, logout } = useAuth();
+  const { logout } = useAuth();
   const [users, setUsers] = useState([]);
   const [units, setUnits] = useState([]);
+  
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [currentView, setCurrentView] = useState("admin");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -67,6 +70,7 @@ const AdminDashboard = () => {
     fetchUsers();
     fetchUnits();
   }, []);
+
 
   const fetchUsers = async () => {
     try {
@@ -137,6 +141,10 @@ const AdminDashboard = () => {
     toast.info("Logged out successfully");
   };
 
+  if (currentView === "shift") {
+    return <ShiftDashboard onBack={() => setCurrentView("admin")} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
@@ -154,12 +162,20 @@ const AdminDashboard = () => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={() => setCurrentView("shift")}
+              >
+                ShiftMaker
+              </Button>
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">
                   {user?.name}
                 </p>
                 <p className="text-xs text-gray-500">{user?.email}</p>
               </div>
+              
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
@@ -313,10 +329,13 @@ const AdminDashboard = () => {
             )}
           </CardContent>
         </Card>
+        
       </main>
 
+      
+
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-        <DialogContent onClose={() => setShowCreateModal(false)}>
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>Create New User</DialogTitle>
             <DialogDescription>
@@ -324,64 +343,82 @@ const AdminDashboard = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateUser} className="space-y-4 mt-4">
-            <div className="space-y-2">
-              <Label htmlFor="name">Full Name *</Label>
-              <Input
-                id="name"
-                value={formData.name}
-                onChange={(e) =>
-                  setFormData({ ...formData, name: e.target.value })
-                }
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={formData.email}
-                onChange={(e) =>
-                  setFormData({ ...formData, email: e.target.value })
-                }
-                required
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password *</Label>
-              <Input
-                id="password"
-                type="password"
-                value={formData.password}
-                onChange={(e) =>
-                  setFormData({ ...formData, password: e.target.value })
-                }
-                required
-                minLength={6}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="unit">Manufacturing Unit *</Label>
-              <Select
-                id="unit"
-                value={formData.unit_id}
-                onChange={(e) =>
-                  setFormData({ ...formData, unit_id: e.target.value })
-                }
-                required
-              >
-                <option value="">Select Unit</option>
-                {units.map((unit) => (
-                  <option key={unit.id} value={unit.id}>
-                    {unit.name} ({unit.code})
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Permissions</Label>
+            {/* Row 1: Full Name and Email */}
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <label className="flex items-center space-x-2">
+                <Label htmlFor="name">Full Name *</Label>
+                <Input
+                  id="name"
+                  placeholder="Enter full name"
+                  value={formData.name}
+                  onChange={(e) =>
+                    setFormData({ ...formData, name: e.target.value })
+                  }
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  placeholder="name@company.com"
+                  value={formData.email}
+                  onChange={(e) =>
+                    setFormData({ ...formData, email: e.target.value })
+                  }
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Row 2: Password and Manufacturing Unit */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="password">Password *</Label>
+                <Input
+                  id="password"
+                  type="password"
+                  placeholder="Minimum 6 characters"
+                  value={formData.password}
+                  onChange={(e) =>
+                    setFormData({ ...formData, password: e.target.value })
+                  }
+                  required
+                  minLength={6}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="unit">Manufacturing Unit *</Label>
+                <Select
+                  id="unit"
+                  value={formData.unit_id}
+                  onChange={(e) =>
+                    setFormData({ ...formData, unit_id: e.target.value })
+                  }
+                  required
+                >
+                  <option value="">Select Unit</option>
+                  {units.map((unit) => (
+                    <option key={unit.id} value={unit.id}>
+                      {unit.name} ({unit.code})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
+
+            {/* Permissions Section */}
+            <div className="space-y-3">
+              <div>
+                <Label className="text-base font-semibold">Permissions</Label>
+                <p className="text-sm text-gray-500 mt-1">
+                  Choose what this user can do in their assigned unit.
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Create Permission */}
+                <label className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.permissions.create}
@@ -394,11 +431,16 @@ const AdminDashboard = () => {
                         },
                       })
                     }
-                    className="rounded"
+                    className="mt-0.5 rounded"
                   />
-                  <span className="text-sm">Create</span>
+                  <div>
+                    <span className="text-sm font-medium">Create</span>
+                    <p className="text-xs text-gray-500">Add new records</p>
+                  </div>
                 </label>
-                <label className="flex items-center space-x-2">
+
+                {/* Read Permission */}
+                <label className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.permissions.read}
@@ -411,11 +453,16 @@ const AdminDashboard = () => {
                         },
                       })
                     }
-                    className="rounded"
+                    className="mt-0.5 rounded"
                   />
-                  <span className="text-sm">Read</span>
+                  <div>
+                    <span className="text-sm font-medium">Read</span>
+                    <p className="text-xs text-gray-500">View assigned records</p>
+                  </div>
                 </label>
-                <label className="flex items-center space-x-2">
+
+                {/* Update Permission */}
+                <label className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.permissions.update}
@@ -428,11 +475,16 @@ const AdminDashboard = () => {
                         },
                       })
                     }
-                    className="rounded"
+                    className="mt-0.5 rounded"
                   />
-                  <span className="text-sm">Update</span>
+                  <div>
+                    <span className="text-sm font-medium">Update</span>
+                    <p className="text-xs text-gray-500">Edit existing records</p>
+                  </div>
                 </label>
-                <label className="flex items-center space-x-2">
+
+                {/* Delete Permission */}
+                <label className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={formData.permissions.delete}
@@ -445,12 +497,52 @@ const AdminDashboard = () => {
                         },
                       })
                     }
-                    className="rounded"
+                    className="mt-0.5 rounded"
                   />
-                  <span className="text-sm">Delete</span>
+                  <div>
+                    <span className="text-sm font-medium">Delete</span>
+                    <p className="text-xs text-gray-500">Remove records</p>
+                  </div>
                 </label>
               </div>
             </div>
+
+            <div className="space-y-3">
+              <div className="text-center">
+                <Label>Permissions</Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Choose what this user can do in their assigned unit.
+                </p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {permissionOptions.map((permission) => (
+                  <label
+                    key={permission.key}
+                    className="flex items-start gap-3 rounded-md border p-3 cursor-pointer"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={formData.permissions[permission.key]}
+                      onChange={(e) =>
+                        setFormData({
+                          ...formData,
+                          permissions: {
+                            ...formData.permissions,
+                            [permission.key]: e.target.checked,
+                          },
+                        })
+                      }
+                      className="mt-0.5 rounded"
+                    />
+                    <div>
+                      <p className="text-sm font-medium">{permission.label}</p>
+                      <p className="text-xs text-muted-foreground">{permission.hint}</p>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            </div>
+
             <div className="flex justify-end space-x-2 pt-4">
               <Button
                 type="button"
@@ -465,8 +557,10 @@ const AdminDashboard = () => {
         </DialogContent>
       </Dialog>
 
+        
+
       <Dialog open={showDetailsModal} onOpenChange={setShowDetailsModal}>
-        <DialogContent onClose={() => setShowDetailsModal(false)}>
+        <DialogContent>
           <DialogHeader>
             <DialogTitle>User Details</DialogTitle>
           </DialogHeader>
