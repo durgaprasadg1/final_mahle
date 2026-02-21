@@ -39,7 +39,7 @@ import {
   Trash2,
   Calendar,
 } from "lucide-react";
-import { formatDate, formatProductType, formatTime } from "../../lib/utils";
+import { formatDate, formatProductType } from "../../lib/utils";
 import { Link } from "react-router-dom";
 
 const UserDashboard = () => {
@@ -53,6 +53,42 @@ const UserDashboard = () => {
   const [activeTab, setActiveTab] = useState("products");
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
+  const [availableShifts, setAvailableShifts] = useState([]);
+  const [batchInterval, setBatchInterval] = useState("hourwise");
+  const [batchTimeSlots, setBatchTimeSlots] = useState([]);
+  const [selectedBatchSlot, setSelectedBatchSlot] = useState("");
+  const [selectedShiftConfigId, setSelectedShiftConfigId] = useState("");
+
+  const VALID_SHIFT_TYPES = ["morning", "afternoon", "night"];
+  const DEFAULT_SHIFT_CONFIGS = [
+    {
+      id: "shift-morning",
+      name: "Morning",
+      startTime: "06:00",
+      endTime: "14:00",
+      timeInterval: "hourwise",
+      backendShift: "morning",
+      isActive: true,
+    },
+    {
+      id: "shift-afternoon",
+      name: "Afternoon",
+      startTime: "14:00",
+      endTime: "22:00",
+      timeInterval: "hourwise",
+      backendShift: "afternoon",
+      isActive: true,
+    },
+    {
+      id: "shift-night",
+      name: "Night",
+      startTime: "22:00",
+      endTime: "23:59",
+      timeInterval: "hourwise",
+      backendShift: "night",
+      isActive: true,
+    },
+  ];
 
   const [productForm, setProductForm] = useState({
     name: "",
@@ -322,6 +358,9 @@ const UserDashboard = () => {
         shift: "morning",
         notes: "",
       });
+      setSelectedBatchSlot("");
+      setBatchTimeSlots([]);
+      setBatchInterval("hourwise");
       fetchBatches();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to create batch");
@@ -341,25 +380,275 @@ const UserDashboard = () => {
     }
   };
 
+  const handleEditBatch = (batch) => {
+    setBatchForm({
+      product_id: String(batch.product_id),
+      quantity_produced: String(batch.quantity_produced),
+      start_time: batch.start_time || "",
+      end_time: batch.end_time || "",
+      shift: batch.shift || "morning",
+      notes: batch.notes || "",
+    });
+
+    const shiftConfig =
+      availableShifts.find((s) => s.backendShift === batch.shift) ||
+      DEFAULT_SHIFT_CONFIGS.find((s) => s.backendShift === batch.shift);
+
+    if (shiftConfig) {
+      setSelectedShiftConfigId(String(shiftConfig.id));
+      const slots = generateTimeSlots(
+        shiftConfig.startTime,
+        shiftConfig.endTime,
+        shiftConfig.timeInterval,
+      );
+      setBatchTimeSlots(slots);
+
+      const matchedSlot = slots.find(
+        (slot) =>
+          slot.startTime === batch.start_time && slot.endTime === batch.end_time,
+      );
+      setSelectedBatchSlot(matchedSlot?.value || "");
+    }
+
+    setShowBatchModal(true);
+  };
+
+  const handleDeleteBatch = async (batchId) => {
+    if (!window.confirm("Are you sure you want to delete this batch?")) return;
+
+    try {
+      await batchAPI.delete(batchId);
+      toast.success("Batch deleted successfully");
+      fetchBatches();
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message || "Failed to delete batch"
+      );
+    }
+  };
+
   const handleLogout = () => {
     logout();
     toast.info("Logged out successfully");
   };
 
-  useEffect(() => {
-    if (showBatchModal) {
-      const now = new Date();
-      const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+  const resolveShiftType = (shiftConfig = {}) => {
+    const shiftLabel = String(
+      shiftConfig.shiftType || shiftConfig.type || shiftConfig.name || "",
+    )
+      .toLowerCase()
+      .trim();
 
-      const formatTimeValue = (date) => {
-        return date.toTimeString().slice(0, 5); // HH:MM format
-      };
+    if (VALID_SHIFT_TYPES.includes(shiftLabel)) {
+      return shiftLabel;
+    }
 
+    if (shiftLabel.includes("morn")) return "morning";
+    if (shiftLabel.includes("after")) return "afternoon";
+    if (shiftLabel.includes("night")) return "night";
+
+    const [startHour] = String(shiftConfig.startTime || "")
+      .split(":")
+      .map(Number);
+    if (Number.isFinite(startHour)) {
+      if (startHour < 12) return "morning";
+      if (startHour < 19) return "afternoon";
+      return "night";
+    }
+
+    return "morning";
+  };
+
+  const getIntervalMinutes = (interval = "hourwise") => {
+    if (interval === "halfhourwise" || interval === "30minutes") return 30;
+    return 60;
+  };
+
+  const generateTimeSlots = (start, end, interval) => {
+    if (!start || !end) return [];
+
+    const stepMinutes = getIntervalMinutes(interval);
+    const [startHour, startMin] = start.split(":").map(Number);
+    const [endHour, endMin] = end.split(":").map(Number);
+
+    let startTotal = startHour * 60 + startMin;
+    let endTotal = endHour * 60 + endMin;
+    if (endTotal <= startTotal) {
+      endTotal += 24 * 60;
+    }
+
+    const formatClock = (minutesTotal) => {
+      const hour = Math.floor(minutesTotal / 60) % 24;
+      const minute = minutesTotal % 60;
+      return `${hour.toString().padStart(2, "0")}:${minute
+        .toString()
+        .padStart(2, "0")}`;
+    };
+
+    const slots = [];
+    let current = startTotal;
+
+    while (current < endTotal) {
+      const next = Math.min(current + stepMinutes, endTotal);
+      slots.push({
+        value: `${formatClock(current)}|${formatClock(next)}`,
+        label: `${formatClock(current)} - ${formatClock(next)}`,
+        startTime: formatClock(current),
+        endTime: formatClock(next),
+      });
+      current = next;
+    }
+
+    return slots;
+  };
+
+  const loadBatchShiftConfigs = () => {
+    try {
+      const rawShifts = localStorage.getItem("shifts");
+      if (!rawShifts) return DEFAULT_SHIFT_CONFIGS;
+
+      const parsedShifts = JSON.parse(rawShifts);
+      if (!Array.isArray(parsedShifts) || parsedShifts.length === 0) {
+        return DEFAULT_SHIFT_CONFIGS;
+      }
+
+      const mapped = parsedShifts
+        .filter((shift) => shift?.isActive !== false)
+        .map((shift, index) => ({
+          id: shift.id || `${shift.name || "shift"}-${index}`,
+          name: shift.name || "Shift",
+          description: shift.description || "",
+          startTime: shift.startTime || "",
+          endTime: shift.endTime || "",
+          timeInterval: shift.timeInterval || "hourwise",
+          backendShift: resolveShiftType(shift),
+          isActive: shift.isActive !== false,
+        }));
+
+      return mapped.length > 0 ? mapped : DEFAULT_SHIFT_CONFIGS;
+    } catch (error) {
+      return DEFAULT_SHIFT_CONFIGS;
+    }
+  };
+
+  const applyShiftConfigToBatchForm = (
+    shiftIdentifier,
+    intervalOverride = null,
+    shiftConfigs = availableShifts,
+  ) => {
+    const config =
+      shiftConfigs.find((s) => String(s.id) === String(shiftIdentifier)) ||
+      shiftConfigs.find((s) => s.backendShift === shiftIdentifier) ||
+      DEFAULT_SHIFT_CONFIGS.find((s) => String(s.id) === String(shiftIdentifier)) ||
+      DEFAULT_SHIFT_CONFIGS.find((s) => s.backendShift === shiftIdentifier) ||
+      DEFAULT_SHIFT_CONFIGS[0];
+
+    const resolvedShiftType = config?.backendShift || "morning";
+
+    const nextInterval = intervalOverride || config?.timeInterval || "hourwise";
+    const nextSlots = generateTimeSlots(
+      config?.startTime,
+      config?.endTime,
+      nextInterval,
+    );
+
+    setSelectedShiftConfigId(config?.id ? String(config.id) : "");
+    setBatchInterval(nextInterval);
+    setBatchTimeSlots(nextSlots);
+    setSelectedBatchSlot("");
+
+    if (config?.startTime && config?.endTime) {
       setBatchForm((prev) => ({
         ...prev,
-        start_time: formatTimeValue(oneHourAgo),
-        end_time: formatTimeValue(now),
+        shift: resolvedShiftType,
+        start_time: config.startTime,
+        end_time: config.endTime,
       }));
+      return;
+    }
+
+    const now = new Date();
+    const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
+    const toTimeValue = (date) => date.toTimeString().slice(0, 5);
+
+    setBatchForm((prev) => ({
+      ...prev,
+      shift: resolvedShiftType,
+      start_time: toTimeValue(oneHourAgo),
+      end_time: toTimeValue(now),
+    }));
+  };
+
+  const getShiftLabel = (shiftConfig) => {
+    const timeText =
+      shiftConfig.startTime && shiftConfig.endTime
+        ? ` (${shiftConfig.startTime} - ${shiftConfig.endTime})`
+        : "";
+    return `${shiftConfig.name}${timeText}`;
+  };
+
+  const getProductCreatorName = (product) => {
+    const creatorName =
+      product.created_by_name ||
+      product.createdByName ||
+      product.created_by_user?.name ||
+      product.user_name;
+
+    if (creatorName) return creatorName;
+
+    const creatorId = product.created_by || product.createdBy;
+    const currentUserId = user?.id || user?.user_id;
+    if (creatorId && currentUserId && Number(creatorId) === Number(currentUserId)) {
+      return user?.name || "You";
+    }
+
+    return "Unknown";
+  };
+
+  const getBatchCreatorName = (batch) => {
+    const creatorName =
+      batch.created_by_name ||
+      batch.createdByName ||
+      batch.created_by_user?.name ||
+      batch.user_name;
+
+    if (creatorName) return creatorName;
+
+    const creatorId = batch.created_by || batch.createdBy;
+    const currentUserId = user?.id || user?.user_id;
+    if (creatorId && currentUserId && Number(creatorId) === Number(currentUserId)) {
+      return user?.name || "You";
+    }
+
+    return "Unknown";
+  };
+
+  const formatSlotStart = (timeValue) => {
+    if (!timeValue) return "-";
+    const str = String(timeValue);
+    const parts = str.split(":");
+    if (parts.length >= 2) {
+      return `${parts[0].padStart(2, "0")}:${parts[1].padStart(2, "0")}`;
+    }
+    return str;
+  };
+
+  const getShiftChoices = () => {
+    return availableShifts.length > 0 ? availableShifts : DEFAULT_SHIFT_CONFIGS;
+  };
+
+  useEffect(() => {
+    if (showBatchModal) {
+      const shiftConfigs = loadBatchShiftConfigs();
+      setAvailableShifts(shiftConfigs);
+
+      const defaultShiftConfig =
+        shiftConfigs.find((s) => s.backendShift === batchForm.shift) ||
+        shiftConfigs[0];
+
+      if (defaultShiftConfig) {
+        applyShiftConfigToBatchForm(defaultShiftConfig.id, null, shiftConfigs);
+      }
     }
   }, [showBatchModal]);
 
@@ -595,9 +884,7 @@ const UserDashboard = () => {
                             )}
                           </TableCell>
                           <TableCell>
-                            <div className="text-sm">
-                              {product.created_by_name || "Unknown"}
-                            </div>
+                            <div className="text-sm">{getProductCreatorName(product)}</div>
                             <div className="text-xs text-gray-400">
                               {new Date(
                                 product.created_at,
@@ -664,10 +951,10 @@ const UserDashboard = () => {
                     <TableHead>Batch Number</TableHead>
                     <TableHead>Product</TableHead>
                     <TableHead>Quantity</TableHead>
-                    <TableHead>Start Time</TableHead>
-                    <TableHead>Duration</TableHead>
+                    <TableHead>Slot Start</TableHead>
                     <TableHead>Status</TableHead>
-                    <TableHead>Created By</TableHead>
+                    <TableHead>Filled By</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -680,17 +967,38 @@ const UserDashboard = () => {
                       <TableCell className="font-semibold">
                         {batch.quantity_produced}
                       </TableCell>
-                      <TableCell>{formatTime(batch.start_time)}</TableCell>
-                      <TableCell>{batch.duration_minutes} min</TableCell>
+                      <TableCell>{formatSlotStart(batch.start_time)}</TableCell>
                       <TableCell>
                         <Badge variant="success">{batch.status}</Badge>
                       </TableCell>
                       <TableCell>
                         <div className="text-sm">
-                          {batch.created_by_name || "Unknown"}
+                          {getBatchCreatorName(batch)}
                         </div>
                         <div className="text-xs text-gray-400">
                           {new Date(batch.created_at).toLocaleDateString()}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end space-x-2">
+                          {user?.permissions?.update && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleEditBatch(batch)}
+                            >
+                              <Edit className="w-4 h-4 text-blue-600" />
+                            </Button>
+                          )}
+                          {user?.permissions?.delete && (
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteBatch(batch.id)}
+                            >
+                              <Trash2 className="w-4 h-4 text-red-600" />
+                            </Button>
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -723,47 +1031,48 @@ const UserDashboard = () => {
             }
           }}
         >
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>
                 {isEditMode ? "Edit Product" : "Add New Product"}
               </DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleCreateProduct} className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label htmlFor="productName">Product Name *</Label>
-                <Input
-                  id="productName"
-                  value={productForm.name}
-                  onChange={(e) =>
-                    setProductForm({ ...productForm, name: e.target.value })
-                  }
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="productType">Product Type *</Label>
-                <Select
-                  id="productType"
-                  value={productForm.type}
-                  onChange={(e) =>
-                    setProductForm({ ...productForm, type: e.target.value })
-                  }
-                  required
-                >
-                  <option value="">Select Type</option>
-                  {productTypes.map((type) => (
-                    <option key={type} value={type}>
-                      {formatProductType(type)}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-              <div className="space-y-4 border-t pt-4">
-                <Label className="text-base font-semibold">Components</Label>
-
-                {/* Fractiles */}
+            <form onSubmit={handleCreateProduct} className="space-y-6 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
+                  <Label htmlFor="productName">Product Name *</Label>
+                  <Input
+                    id="productName"
+                    value={productForm.name}
+                    onChange={(e) =>
+                      setProductForm({ ...productForm, name: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="productType">Product Type *</Label>
+                  <Select
+                    id="productType"
+                    value={productForm.type}
+                    onChange={(e) =>
+                      setProductForm({ ...productForm, type: e.target.value })
+                    }
+                    required
+                  >
+                    <option value="">Select Type</option>
+                    {productTypes.map((type) => (
+                      <option key={type} value={type}>
+                        {formatProductType(type)}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-4 border-t pt-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
                   <Label htmlFor="fractile" className="text-sm">
                     Fractiles
                   </Label>
@@ -803,7 +1112,7 @@ const UserDashboard = () => {
                     </Select>
                     
                   </div>
-                  {productForm.fractiles.length > 0 && (
+                    {productForm.fractiles.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
                       {productForm.fractiles.map((f, idx) => (
                         <Badge key={idx} variant="secondary">
@@ -819,10 +1128,9 @@ const UserDashboard = () => {
                       ))}
                     </div>
                   )}
-                </div>
+                  </div>
 
-                {/* Cells */}
-                <div className="space-y-2">
+                  <div className="space-y-2">
                   <Label htmlFor="cell" className="text-sm">
                     Cells
                   </Label>
@@ -862,7 +1170,7 @@ const UserDashboard = () => {
                     </Select>
                     
                   </div>
-                  {productForm.cells.length > 0 && (
+                    {productForm.cells.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
                       {productForm.cells.map((c, idx) => (
                         <Badge key={idx} variant="secondary">
@@ -878,10 +1186,9 @@ const UserDashboard = () => {
                       ))}
                     </div>
                   )}
-                </div>
+                  </div>
 
-                {/* Tiers */}
-                <div className="space-y-2">
+                  <div className="space-y-2">
                   <Label htmlFor="tier" className="text-sm">
                     Tiers
                   </Label>
@@ -921,7 +1228,7 @@ const UserDashboard = () => {
                     </Select>
                     
                   </div>
-                  {productForm.tiers.length > 0 && (
+                    {productForm.tiers.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
                       {productForm.tiers.map((t, idx) => (
                         <Badge key={idx} variant="secondary">
@@ -937,8 +1244,10 @@ const UserDashboard = () => {
                       ))}
                     </div>
                   )}
+                  </div>
                 </div>
               </div>
+
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Textarea
@@ -978,86 +1287,106 @@ const UserDashboard = () => {
               <DialogTitle>Record Production Batch</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleCreateBatch} className="space-y-4 mt-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="batchProduct">Product *</Label>
+                  <Select
+                    id="batchProduct"
+                    value={batchForm.product_id}
+                    onChange={(e) =>
+                      setBatchForm({ ...batchForm, product_id: e.target.value })
+                    }
+                    required
+                  >
+                    <option value="">Select Product</option>
+                    {products.map((product) => (
+                      <option key={product.id} value={product.id}>
+                        {product.name} ({formatProductType(product.type)})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="quantity">Quantity Produced *</Label>
+                  <Input
+                    id="quantity"
+                    type="number"
+                    min="1"
+                    value={batchForm.quantity_produced}
+                    onChange={(e) =>
+                      setBatchForm({
+                        ...batchForm,
+                        quantity_produced: e.target.value,
+                      })
+                    }
+                    required
+                  />
+                </div>
+              </div>
               <div className="space-y-2">
-                <Label htmlFor="batchProduct">Product *</Label>
+                <Label>Shift *</Label>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                  {getShiftChoices().map((shiftConfig) => (
+                    <label
+                      key={`${shiftConfig.id}-${shiftConfig.backendShift}`}
+                      className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer ${
+                        (selectedShiftConfigId
+                          ? String(selectedShiftConfigId) === String(shiftConfig.id)
+                          : (batchForm.shift || "morning") === shiftConfig.backendShift)
+                          ? "border-primary bg-primary/5"
+                          : "border-gray-200"
+                      }`}
+                    >
+                      <input
+                        type="radio"
+                        name="shift"
+                        value={shiftConfig.id}
+                        checked={
+                          selectedShiftConfigId
+                            ? String(selectedShiftConfigId) === String(shiftConfig.id)
+                            : (batchForm.shift || "morning") ===
+                              shiftConfig.backendShift
+                        }
+                        onChange={() => applyShiftConfigToBatchForm(shiftConfig.id)}
+                      />
+                      <span className="text-sm">{getShiftLabel(shiftConfig)}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="timeSlot">Time Slot *</Label>
                 <Select
-                  id="batchProduct"
-                  value={batchForm.product_id}
-                  onChange={(e) =>
-                    setBatchForm({ ...batchForm, product_id: e.target.value })
-                  }
+                  id="timeSlot"
+                  value={selectedBatchSlot}
+                  onChange={(e) => {
+                    const slotValue = e.target.value;
+                    setSelectedBatchSlot(slotValue);
+
+                    const selectedSlot = batchTimeSlots.find(
+                      (slot) => slot.value === slotValue,
+                    );
+
+                    if (!selectedSlot) return;
+
+                    setBatchForm((prev) => ({
+                      ...prev,
+                      start_time: selectedSlot.startTime,
+                      end_time: selectedSlot.endTime,
+                    }));
+                  }}
                   required
                 >
-                  <option value="">Select Product</option>
-                  {products.map((product) => (
-                    <option key={product.id} value={product.id}>
-                      {product.name} ({formatProductType(product.type)})
+                  <option value="">Select slot</option>
+                  {batchTimeSlots.map((slot) => (
+                    <option key={slot.value} value={slot.value}>
+                      {slot.label}
                     </option>
                   ))}
                 </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity Produced *</Label>
-                <Input
-                  id="quantity"
-                  type="number"
-                  min="1"
-                  value={batchForm.quantity_produced}
-                  onChange={(e) =>
-                    setBatchForm({
-                      ...batchForm,
-                      quantity_produced: e.target.value,
-                    })
-                  }
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="shift">Shift *</Label>
-                <Select
-                  id="shift"
-                  value={batchForm.shift || "morning"}
-                  onChange={(e) =>
-                    setBatchForm({ ...batchForm, shift: e.target.value })
-                  }
-                  required
-                >
-                  <option value="morning">Morning</option>
-                  <option value="afternoon">Afternoon</option>
-                  <option value="night">Night</option>
-                </Select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="startTime">Start Time (HH:MM) *</Label>
-                  <Input
-                    id="startTime"
-                    type="time"
-                    value={batchForm.start_time}
-                    onChange={(e) =>
-                      setBatchForm({
-                        ...batchForm,
-                        start_time: e.target.value,
-                      })
-                    }
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endTime">End Time (HH:MM) *</Label>
-                  <Input
-                    id="endTime"
-                    type="time"
-                    value={batchForm.end_time}
-                    onChange={(e) =>
-                      setBatchForm({
-                        ...batchForm,
-                        end_time: e.target.value,
-                      })
-                    }
-                    required
-                  />
-                </div>
+                <p className="text-xs text-gray-500">
+                  Slot list is auto-generated from admin shift timing and interval.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="notes">Notes</Label>
