@@ -28,13 +28,7 @@ import {
 } from "../../components/ui/dialog";
 import { Badge } from "../../components/ui/badge";
 import { toast } from "react-toastify";
-import {
-  Clock,
-  Plus,
-  Edit,
-  Trash2,
-  ArrowLeft,
-} from "lucide-react";
+import { Clock, Plus, Edit, Trash2, ArrowLeft } from "lucide-react";
 
 const ShiftDashboard = ({ onBack }) => {
   const [shifts, setShifts] = useState([]);
@@ -58,7 +52,7 @@ const ShiftDashboard = ({ onBack }) => {
   const fetchShifts = async () => {
     try {
       setLoading(true);
-      
+
       const savedShifts = localStorage.getItem("shifts");
       if (savedShifts) {
         setShifts(JSON.parse(savedShifts));
@@ -90,10 +84,6 @@ const ShiftDashboard = ({ onBack }) => {
       toast.error("Start and end times are required");
       return;
     }
-    if (formData.startTime >= formData.endTime) {
-      toast.error("End time must be after start time");
-      return;
-    }
 
     try {
       const newShift = {
@@ -104,7 +94,9 @@ const ShiftDashboard = ({ onBack }) => {
 
       let updatedShifts;
       if (editingShift) {
-        updatedShifts = shifts.map((s) => (s.id === editingShift.id ? newShift : s));
+        updatedShifts = shifts.map((s) =>
+          s.id === editingShift.id ? newShift : s,
+        );
         toast.success("Shift updated successfully");
       } else {
         updatedShifts = [...shifts, newShift];
@@ -113,7 +105,7 @@ const ShiftDashboard = ({ onBack }) => {
 
       setShifts(updatedShifts);
       localStorage.setItem("shifts", JSON.stringify(updatedShifts));
-      
+
       setShowCreateModal(false);
       setEditingShift(null);
       resetForm();
@@ -176,14 +168,14 @@ const ShiftDashboard = ({ onBack }) => {
   const calculateDuration = (startTime, endTime) => {
     const [startHour, startMin] = startTime.split(":").map(Number);
     const [endHour, endMin] = endTime.split(":").map(Number);
-    
+
     const startTotalMin = startHour * 60 + startMin;
     const endTotalMin = endHour * 60 + endMin;
     const durationMin = endTotalMin - startTotalMin;
-    
+
     const hours = Math.floor(durationMin / 60);
     const mins = durationMin % 60;
-    
+
     return `${hours}h ${mins}m`;
   };
 
@@ -191,7 +183,8 @@ const ShiftDashboard = ({ onBack }) => {
     if (!start || !end) return [];
 
     let intervalMin = 60; // Default rahega yeh
-    if (interval === "halfhourwise" || interval === "30minutes") intervalMin = 30;
+    if (interval === "halfhourwise" || interval === "30minutes")
+      intervalMin = 30;
     if (interval === "15minutes") intervalMin = 15;
 
     const [startH, startM] = start.split(":").map(Number);
@@ -225,7 +218,11 @@ const ShiftDashboard = ({ onBack }) => {
     return slots;
   };
 
-  const timeSlotsPreview = generateTimeSlots(formData.startTime, formData.endTime, formData.timeInterval);
+  const timeSlotsPreview = generateTimeSlots(
+    formData.startTime,
+    formData.endTime,
+    formData.timeInterval,
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -246,8 +243,12 @@ const ShiftDashboard = ({ onBack }) => {
           <div className="flex items-center space-x-4">
             <Clock className="w-8 h-8 text-primary" />
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Shift Manager</h1>
-              <p className="text-sm text-gray-500">Manage shift schedules and timings</p>
+              <h1 className="text-3xl font-bold text-gray-900">
+                Shift Manager
+              </h1>
+              <p className="text-sm text-gray-500">
+                Manage shift schedules and timings
+              </p>
             </div>
           </div>
         </div>
@@ -256,7 +257,9 @@ const ShiftDashboard = ({ onBack }) => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Shifts</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Total Shifts
+              </CardTitle>
               <Clock className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
@@ -265,7 +268,9 @@ const ShiftDashboard = ({ onBack }) => {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Active Shifts</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Active Shifts
+              </CardTitle>
               <Clock className="h-4 w-4 text-green-600" />
             </CardHeader>
             <CardContent>
@@ -276,7 +281,9 @@ const ShiftDashboard = ({ onBack }) => {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Inactive Shifts</CardTitle>
+              <CardTitle className="text-sm font-medium">
+                Inactive Shifts
+              </CardTitle>
               <Clock className="h-4 w-4 text-red-600" />
             </CardHeader>
             <CardContent>
@@ -289,7 +296,10 @@ const ShiftDashboard = ({ onBack }) => {
 
         {/* Create Button */}
         <div className="mb-6">
-          <Button onClick={() => setShowCreateModal(true)} className="flex items-center">
+          <Button
+            onClick={() => setShowCreateModal(true)}
+            className="flex items-center"
+          >
             <Plus className="w-4 h-4 mr-2" />
             Create New Shift
           </Button>
@@ -338,69 +348,67 @@ const ShiftDashboard = ({ onBack }) => {
                           {shift.startTime} - {shift.endTime}
                         </TableCell>
                         <TableCell>
-                          {calculateDuration(shift.startTime, shift.endTime)}
+                          {calculateDuration(shift.startTime, shift.endTime)  < 0 ? `(Overnight Shift) ${calculateDuration(shift.startTime, shift.endTime)}` : calculateDuration(shift.startTime, shift.endTime)}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="outline">
-                            {shift.timeInterval}
-                          </Badge>
+                          <Badge variant="outline">{shift.timeInterval}</Badge>
                         </TableCell>
                         {/* 1. Status Column */}
-<TableCell>
-  <Badge
-    variant="outline"
-    className={
-      shift.isActive
-        ? "bg-green-50 text-green-700 border-green-200"
-        : "bg-red-50 text-red-700 border-red-200"
-    }
-  >
-    {shift.isActive ? "Active" : "Inactive"}
-  </Badge>
-</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant="outline"
+                            className={
+                              shift.isActive
+                                ? "bg-green-50 text-green-700 border-green-200"
+                                : "bg-red-50 text-red-700 border-red-200"
+                            }
+                          >
+                            {shift.isActive ? "Active" : "Inactive"}
+                          </Badge>
+                        </TableCell>
 
-{/* 2. Actions Column */}
-<TableCell>
-  <div className="flex items-center space-x-2">
-    {/* Toggle Status Button */}
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={() => handleToggleStatus(shift.id)}
-      className={
-        shift.isActive
-          ? "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
-          : "text-green-600 hover:text-green-700 hover:bg-green-50"
-      }
-    >
-      <IoToggle 
-        className={`w-7 h-7 transition-transform duration-200 ${
-          shift.isActive ? "" : "rotate-180 opacity-70"
-        }`} 
-      />
-    </Button>
+                        {/* 2. Actions Column */}
+                        <TableCell>
+                          <div className="flex items-center space-x-2">
+                            {/* Toggle Status Button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleToggleStatus(shift.id)}
+                              className={
+                                shift.isActive
+                                  ? "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+                                  : "text-green-600 hover:text-green-700 hover:bg-green-50"
+                              }
+                            >
+                              <IoToggle
+                                className={`w-7 h-7 transition-transform duration-200 ${
+                                  shift.isActive ? "" : "rotate-180 opacity-70"
+                                }`}
+                              />
+                            </Button>
 
-    {/* Edit Button */}
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={() => handleEditShift(shift)}
-      className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-    >
-      <Edit className="w-4 h-4" />
-    </Button>
+                            {/* Edit Button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleEditShift(shift)}
+                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+                            >
+                              <Edit className="w-4 h-4" />
+                            </Button>
 
-    {/* Delete Button */}
-    <Button
-      variant="ghost"
-      size="sm"
-      onClick={() => handleDeleteShift(shift.id)}
-      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-    >
-      <Trash2 className="w-4 h-4" />
-    </Button>
-  </div>
-</TableCell>
+                            {/* Delete Button */}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteShift(shift.id)}
+                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -416,7 +424,6 @@ const ShiftDashboard = ({ onBack }) => {
       {showCreateModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto flex flex-col relative">
-            
             {/* Modal Header */}
             <div className="px-6 py-4 border-b border-gray-600 sticky top-0 bg-white z-10 flex justify-between items-center">
               <div>
@@ -424,7 +431,7 @@ const ShiftDashboard = ({ onBack }) => {
                   {editingShift ? "Edit Shift" : "Create New Shift"}
                 </h2>
               </div>
-              <button 
+              <button
                 onClick={handleCloseModal}
                 className="text-gray-400 hover:text-gray-600 transition-colors text-xl leading-none"
               >
@@ -435,7 +442,6 @@ const ShiftDashboard = ({ onBack }) => {
             {/* Modal Body (Form) */}
             <div className="p-6">
               <form onSubmit={handleCreateShift} className="space-y-6">
-                
                 {/* Row 1: Name and Description */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -534,7 +540,10 @@ const ShiftDashboard = ({ onBack }) => {
                     onChange={handleInputChange}
                     className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
                   />
-                  <Label htmlFor="isActive" className="mb-0 cursor-pointer font-medium">
+                  <Label
+                    htmlFor="isActive"
+                    className="mb-0 cursor-pointer font-medium"
+                  >
                     Mark as Active
                   </Label>
                 </div>
@@ -547,7 +556,11 @@ const ShiftDashboard = ({ onBack }) => {
                     </Label>
                     <div className="flex flex-wrap gap-2 max-h-40 overflow-y-auto p-1">
                       {timeSlotsPreview.map((slot, index) => (
-                        <Badge key={index} variant="secondary" className="font-mono text-xs py-1">
+                        <Badge
+                          key={index}
+                          variant="secondary"
+                          className="font-mono text-xs py-1"
+                        >
                           {slot}
                         </Badge>
                       ))}

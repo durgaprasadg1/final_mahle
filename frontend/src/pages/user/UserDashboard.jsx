@@ -50,6 +50,7 @@ const UserDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [showProductModal, setShowProductModal] = useState(false);
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [showReportModal, setShowReportModal] = useState(false);
   const [activeTab, setActiveTab] = useState("products");
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingProductId, setEditingProductId] = useState(null);
@@ -58,8 +59,114 @@ const UserDashboard = () => {
   const [batchTimeSlots, setBatchTimeSlots] = useState([]);
   const [selectedBatchSlot, setSelectedBatchSlot] = useState("");
   const [selectedShiftConfigId, setSelectedShiftConfigId] = useState("");
+  const [reportType, setReportType] = useState("daily");
+  const [reportDate, setReportDate] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+  const [reportResults, setReportResults] = useState([]);
 
   const VALID_SHIFT_TYPES = ["morning", "afternoon", "night"];
+
+  const handleGenerateReport = async () => {
+    setIsGeneratingReport(true);
+    try {
+      let dateFrom, dateTo;
+      const selectedDate = new Date(reportDate);
+
+      if (reportType === "daily") {
+        dateFrom = reportDate;
+        dateTo = reportDate;
+      } else if (reportType === "weekly") {
+        // Start from Monday
+        const day = selectedDate.getDay();
+        const diff = selectedDate.getDate() - day + (day === 0 ? -6 : 1);
+        const start = new Date(selectedDate.setDate(diff));
+        const end = new Date(selectedDate.setDate(diff + 6));
+        dateFrom = start.toISOString().split("T")[0];
+        dateTo = end.toISOString().split("T")[0];
+      } else if (reportType === "monthly") {
+        const firstDay = new Date(
+          selectedDate.getFullYear(),
+          selectedDate.getMonth(),
+          1,
+        );
+        const lastDay = new Date(
+          selectedDate.getFullYear(),
+          selectedDate.getMonth() + 1,
+          0,
+        );
+        dateFrom = firstDay.toISOString().split("T")[0];
+        dateTo = lastDay.toISOString().split("T")[0];
+      }
+
+      const response = await batchAPI.getAll({
+        date_from: dateFrom,
+        date_to: dateTo,
+        limit: 1000,
+      });
+
+      setReportResults(response.data.data);
+      if (response.data.data.length === 0) {
+        toast.info("No batches found for the selected period");
+      }
+    } catch (error) {
+      toast.error("Failed to generate report");
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
+  const downloadExcel = () => {
+    if (reportResults.length === 0) {
+      toast.warning("No data to download");
+      return;
+    }
+
+    const headers = [
+      "ID",
+      "Batch Number",
+      "Product",
+      "Quantity",
+      "Shift",
+      "Start Time",
+      "End Time",
+      "Notes",
+      "Filled By",
+      "Date",
+    ];
+
+    const rows = reportResults.map((b) => [
+      b.id,
+      b.batch_number,
+      b.product_name,
+      b.quantity_produced,
+      b.shift,
+      b.start_time,
+      b.end_time,
+      (b.notes || "").replace(/,/g, " "),
+      b.created_by_name,
+      new Date(b.created_at).toLocaleDateString(),
+    ]);
+
+    const csvContent =
+      "data:text/csv;charset=utf-8," +
+      headers.join(",") +
+      "\n" +
+      rows.map((r) => r.join(",")).join("\n");
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute(
+      "download",
+      `Production_Report_${reportType}_${reportDate}.csv`,
+    );
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const DEFAULT_SHIFT_CONFIGS = [
     {
       id: "shift-morning",
@@ -83,7 +190,7 @@ const UserDashboard = () => {
       id: "shift-night",
       name: "Night",
       startTime: "22:00",
-      endTime: "23:59",
+      endTime: "06:00",
       timeInterval: "hourwise",
       backendShift: "night",
       isActive: true,
@@ -186,9 +293,17 @@ const UserDashboard = () => {
       const mapped = response.data.data.map((b) => {
         let duration = 0;
         try {
-          const today = new Date().toISOString().split("T")[0];
-          const start = new Date(`${today}T${b.start_time}`);
-          const end = new Date(`${today}T${b.end_time}`);
+          const dateStr = b.created_at
+            ? new Date(b.created_at).toISOString().split("T")[0]
+            : new Date().toISOString().split("T")[0];
+          const start = new Date(`${dateStr}T${b.start_time}`);
+          let end = new Date(`${dateStr}T${b.end_time}`);
+
+          // Handle overnight shifts
+          if (end <= start) {
+            end.setDate(end.getDate() + 1);
+          }
+
           duration = Math.round((end - start) / 60000);
         } catch (e) {
           duration = 0;
@@ -713,6 +828,15 @@ const UserDashboard = () => {
                 </p>
                 <p className="text-xs text-gray-500">{user?.email}</p>
               </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowReportModal(true)}
+                className="bg-blue-50 text-blue-700 hover:bg-blue-100 border-blue-200"
+              >
+                <TrendingUp className="w-4 h-4 mr-2" />
+                Reports
+              </Button>
               <Button variant="outline" size="sm" onClick={handleLogout}>
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
@@ -810,13 +934,7 @@ const UserDashboard = () => {
                       Add Product
                     </Button>
                     <Link to="/templates/fractiles">
-                      <Button variant="outline">Manage Fractiles</Button>
-                    </Link>
-                    <Link to="/templates/cells">
-                      <Button variant="outline">Manage Cells</Button>
-                    </Link>
-                    <Link to="/templates/tiers">
-                      <Button variant="outline">Manage Tiers</Button>
+                      <Button variant="outline">Manage Components</Button>
                     </Link>
                   </div>
                 )}
@@ -1423,11 +1541,34 @@ const UserDashboard = () => {
                   required
                 >
                   <option value="">Select slot</option>
-                  {batchTimeSlots.map((slot) => (
-                    <option key={slot.value} value={slot.value}>
-                      {slot.label}
-                    </option>
-                  ))}
+                  {batchTimeSlots
+                    .filter((slot) => {
+                      // Don't show slots that have already been used for this product TODAY
+                      const isCurrentSlotSelected =
+                        batchForm.start_time === slot.startTime &&
+                        batchForm.end_time === slot.endTime;
+                      if (isCurrentSlotSelected) return true;
+
+                      const today = new Date().toISOString().split("T")[0];
+                      const isUsed = batches.some((b) => {
+                        const batchDate = b.created_at
+                          ? new Date(b.created_at).toISOString().split("T")[0]
+                          : today;
+                        return (
+                          String(b.product_id) ===
+                            String(batchForm.product_id) &&
+                          b.start_time === slot.startTime &&
+                          b.end_time === slot.endTime &&
+                          batchDate === today
+                        );
+                      });
+                      return !isUsed;
+                    })
+                    .map((slot) => (
+                      <option key={slot.value} value={slot.value}>
+                        {slot.label}
+                      </option>
+                    ))}
                 </Select>
                 <p className="text-xs text-gray-500">
                   Slot list is auto-generated from admin shift timing and
@@ -1459,6 +1600,148 @@ const UserDashboard = () => {
           </DialogContent>
         </Dialog>
       )}
+
+      {/* Reports Modal */}
+      <Dialog
+        open={showReportModal}
+        onOpenChange={(open) => {
+          setShowReportModal(open);
+          if (!open) setReportResults([]);
+        }}
+      >
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Production Reports</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-6 mt-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
+              <div className="space-y-2">
+                <Label>Report Type</Label>
+                <Select
+                  value={reportType}
+                  onChange={(e) => setReportType(e.target.value)}
+                >
+                  <option value="daily">Daily</option>
+                  <option value="weekly">Weekly</option>
+                  <option value="monthly">Monthly</option>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  Select {reportType === "monthly" ? "Month" : "Date"}
+                </Label>
+                <Input
+                  type={reportType === "monthly" ? "month" : "date"}
+                  value={reportDate}
+                  onChange={(e) => setReportDate(e.target.value)}
+                />
+              </div>
+              <div className="flex items-end space-x-2">
+                <Button
+                  className="flex-1"
+                  onClick={handleGenerateReport}
+                  disabled={isGeneratingReport}
+                >
+                  {isGeneratingReport ? "Generating..." : "Generate"}
+                </Button>
+                {reportResults.length > 0 && (
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-green-600 text-green-600 hover:bg-green-50"
+                    onClick={downloadExcel}
+                  >
+                    Export CSV
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {reportResults.length > 0 && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
+                  <Card className="bg-blue-50 border-blue-200">
+                    <CardHeader className="py-2">
+                      <CardTitle className="text-sm font-medium text-blue-800">
+                        Total Batches
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="py-2">
+                      <div className="text-xl font-bold text-blue-900">
+                        {reportResults.length}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-green-50 border-green-200">
+                    <CardHeader className="py-2">
+                      <CardTitle className="text-sm font-medium text-green-800">
+                        Total Quantity
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="py-2">
+                      <div className="text-xl font-bold text-green-900">
+                        {reportResults.reduce(
+                          (sum, b) => sum + (b.quantity_produced || 0),
+                          0,
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card className="bg-purple-50 border-purple-200">
+                    <CardHeader className="py-2">
+                      <CardTitle className="text-sm font-medium text-purple-800">
+                        Unique Products
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="py-2">
+                      <div className="text-xl font-bold text-purple-900">
+                        {new Set(reportResults.map((b) => b.product_id)).size}
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="border rounded-md">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Date</TableHead>
+                        <TableHead>Shift</TableHead>
+                        <TableHead>Product</TableHead>
+                        <TableHead>Quantity</TableHead>
+                        <TableHead>Worker</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {reportResults.slice(0, 50).map((b) => (
+                        <TableRow key={b.id}>
+                          <TableCell>
+                            {new Date(b.created_at).toLocaleDateString()}
+                          </TableCell>
+                          <TableCell className="capitalize">
+                            {b.shift}
+                          </TableCell>
+                          <TableCell className="font-medium">
+                            {b.product_name}
+                          </TableCell>
+                          <TableCell>{b.quantity_produced}</TableCell>
+                          <TableCell className="text-xs">
+                            {b.created_by_name}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                  {reportResults.length > 50 && (
+                    <div className="p-4 text-center text-sm text-gray-500 italic">
+                      Showing first 50 results. Download full CSV for all data.
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
