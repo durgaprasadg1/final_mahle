@@ -289,7 +289,7 @@ const UserDashboard = () => {
 
   const fetchBatches = async () => {
     try {
-      const response = await batchAPI.getAll({ limit: 50 });
+      const response = await batchAPI.getAll({ limit: 100 });
       const mapped = response.data.data.map((b) => {
         let duration = 0;
         try {
@@ -1554,11 +1554,20 @@ const UserDashboard = () => {
                         const batchDate = b.created_at
                           ? new Date(b.created_at).toISOString().split("T")[0]
                           : today;
+
+                        const normStartTime = (b.start_time || "").substring(
+                          0,
+                          5,
+                        );
+                        const normEndTime = (b.end_time || "").substring(0, 5);
+
                         return (
                           String(b.product_id) ===
                             String(batchForm.product_id) &&
-                          b.start_time === slot.startTime &&
-                          b.end_time === slot.endTime &&
+                          normStartTime ===
+                            (slot.startTime || "").substring(0, 5) &&
+                          normEndTime ===
+                            (slot.endTime || "").substring(0, 5) &&
                           batchDate === today
                         );
                       });
