@@ -41,6 +41,7 @@ import {
   Trash2,
   Eye,
 } from "lucide-react";
+import { formatDate, formatDateOnly } from "../../lib/utils";
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
@@ -301,9 +302,7 @@ const AdminDashboard = () => {
                             {user.status}
                           </Badge>
                         </TableCell>
-                        <TableCell>
-                          {new Date(user.created_at).toLocaleDateString()}
-                        </TableCell>
+                        <TableCell>{formatDateOnly(user.created_at)}</TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end space-x-2">
                             <Button
@@ -591,7 +590,7 @@ const AdminDashboard = () => {
                 <Label className="text-xs text-gray-500">Last Login</Label>
                 <p className="font-medium">
                   {selectedUser.last_login
-                    ? new Date(selectedUser.last_login).toLocaleString()
+                    ? formatDate(selectedUser.last_login)
                     : "Never"}
                 </p>
               </div>

@@ -512,25 +512,9 @@ const ShiftDashboard = ({ onBack }) => {
                       <option value="15minutes">15 Minutes</option>
                     </Select>
                   </div>
-                  <div>
-                    <Label htmlFor="color">Color Code</Label>
-                    <div className="flex items-center space-x-3 mt-1">
-                      <Input
-                        id="color"
-                        name="color"
-                        type="color"
-                        value={formData.color}
-                        onChange={handleInputChange}
-                        className="w-14 h-10 p-1 cursor-pointer"
-                      />
-                      <span className="text-sm font-mono bg-gray-100 px-2 py-1 rounded text-gray-600 border">
-                        {formData.color}
-                      </span>
-                    </div>
-                  </div>
+                 
                 </div>
 
-                {/* Status Toggle */}
                 <div className="flex items-center space-x-2 pt-2">
                   <input
                     id="isActive"

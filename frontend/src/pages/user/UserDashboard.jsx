@@ -39,7 +39,7 @@ import {
   Trash2,
   Calendar,
 } from "lucide-react";
-import { formatDate, formatProductType } from "../../lib/utils";
+import { formatDate, formatDateOnly, formatProductType } from "../../lib/utils";
 import { Link } from "react-router-dom";
 
 const UserDashboard = () => {
@@ -146,7 +146,7 @@ const UserDashboard = () => {
       b.end_time,
       (b.notes || "").replace(/,/g, " "),
       b.created_by_name,
-      new Date(b.created_at).toLocaleDateString(),
+      formatDateOnly(b.created_at),
     ]);
 
     const csvContent =
@@ -1043,9 +1043,7 @@ const UserDashboard = () => {
                               {getProductCreatorName(product)}
                             </div>
                             <div className="text-xs text-gray-400">
-                              {new Date(
-                                product.created_at,
-                              ).toLocaleDateString()}
+                              {formatDateOnly(product.created_at)}
                             </div>
                           </TableCell>
                           <TableCell className="text-right">
@@ -1133,7 +1131,7 @@ const UserDashboard = () => {
                           {getBatchCreatorName(batch)}
                         </div>
                         <div className="text-xs text-gray-400">
-                          {new Date(batch.created_at).toLocaleDateString()}
+                          {formatDateOnly(batch.created_at)}
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
@@ -1723,9 +1721,7 @@ const UserDashboard = () => {
                     <TableBody>
                       {reportResults.slice(0, 50).map((b) => (
                         <TableRow key={b.id}>
-                          <TableCell>
-                            {new Date(b.created_at).toLocaleDateString()}
-                          </TableCell>
+                          <TableCell>{formatDateOnly(b.created_at)}</TableCell>
                           <TableCell className="capitalize">
                             {b.shift}
                           </TableCell>
