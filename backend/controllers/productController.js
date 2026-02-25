@@ -1,5 +1,6 @@
 import Product from "../models/Product.js";
 import ProductComponent from "../models/ProductComponent.js";
+import Tier from "../models/Tier.js";
 
 class ProductController {
   // Create product with components
@@ -10,25 +11,45 @@ class ProductController {
         type,
         description,
         specifications,
-        fractiles,
-        cells,
-        tiers,
+        tier_id,
       } = req.body;
 
-      if (!name || !type) {
+      if (!name || !type || !tier_id) {
         return res.status(400).json({
           success: false,
-          message: "Product name and type are required",
+          message: "Product name, type, and tier_id are required",
         });
       }
 
-      const unit_id =
-        req.user.role === "admin" ? req.body.unit_id : req.user.unit_id;
+      const hierarchy = await Tier.getHierarchyDetailsById(tier_id);
+
+      if (!hierarchy) {
+        return res.status(404).json({
+          success: false,
+          message: "Tier not found",
+        });
+      }
+
+      if (!hierarchy.cell || !hierarchy.fractile) {
+        return res.status(400).json({
+          success: false,
+          message: "Tier hierarchy is incomplete (missing cell or fractile)",
+        });
+      }
+
+      const unit_id = hierarchy.tier.unit_id;
 
       if (!unit_id) {
         return res.status(400).json({
           success: false,
-          message: "Unit ID is required",
+          message: "Unable to resolve unit from tier hierarchy",
+        });
+      }
+
+      if (req.user.role !== "admin" && unit_id !== req.user.unit_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this tier",
         });
       }
 
@@ -39,9 +60,7 @@ class ProductController {
         description,
         specifications,
         created_by: req.user.id,
-        fractiles: fractiles || [],
-        cells: cells || [],
-        tiers: tiers || [],
+        tier_id,
       };
 
       const product = await Product.create(productData);
