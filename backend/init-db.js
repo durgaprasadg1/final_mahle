@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import pg from "pg";
 import dotenv from "dotenv";
+import { fileURLToPath } from "url";
 
 dotenv.config();
 
@@ -19,18 +20,21 @@ async function initializeDatabase() {
   const client = await pool.connect();
   try {
     console.log("🔧 Starting database initialization...");
-    
+
+    // Determine directory of this file in ESM
+    const __filename = fileURLToPath(import.meta.url);
+    const __dirname = path.dirname(__filename);
+
     // Read the SQL file
-    const sqlFile = path.join(import.meta.dirname, "config", "database.sql");
+    const sqlFile = path.join(__dirname, "config", "database.sql");
     const sql = fs.readFileSync(sqlFile, "utf-8");
-    
-    // Execute the SQL
+
+    // Execute the SQL (may contain multiple statements)
     await client.query(sql);
-    
+
     console.log("✅ Database initialized successfully!");
     console.log("✅ All tables, indexes, and functions created");
     console.log("✅ Sample data inserted");
-    
   } catch (error) {
     console.error("❌ Database initialization failed:", error.message);
     console.error("Error details:", error);
