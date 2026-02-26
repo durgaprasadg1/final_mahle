@@ -15,11 +15,11 @@ const pool = new Pool({
 });
 
 pool.on("connect", () => {
-  console.log("✅ Database connected successfully");
+  console.log("Database connected successfully");
 });
 
 pool.on("error", (err) => {
-  console.error("❌ Database connection error:", err);
+  console.error("Database connection error:", err);
   process.exit(-1);
 });
 
