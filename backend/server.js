@@ -8,7 +8,13 @@ import userRoutes from "./routes/userRoutes.js";
 import unitRoutes from "./routes/unitRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
+<<<<<<< Updated upstream
 import templateRoutes from "./routes/templateRoutes.js";
+=======
+import tierRoutes from "./routes/tierRoutes.js";
+
+dotenv.config();
+>>>>>>> Stashed changes
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -30,7 +36,11 @@ app.use("/api/users", userRoutes);
 app.use("/api/units", unitRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/batches", batchRoutes);
+<<<<<<< Updated upstream
 app.use("/api/templates", templateRoutes);
+=======
+app.use("/api/tiers", tierRoutes);
+>>>>>>> Stashed changes
 
 app.use(notFound);
 app.use(errorHandler);

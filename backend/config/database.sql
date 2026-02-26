@@ -69,6 +69,7 @@ CREATE TABLE products (
 CREATE TABLE product_fractiles (
     id SERIAL PRIMARY KEY,
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    cell_id INTEGER,
     name VARCHAR(100) NOT NULL,
     count INTEGER DEFAULT 0,
     description TEXT,
@@ -80,6 +81,7 @@ CREATE TABLE product_fractiles (
 CREATE TABLE product_cells (
     id SERIAL PRIMARY KEY,
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    tier_id INTEGER,
     name VARCHAR(100) NOT NULL,
     count INTEGER DEFAULT 0,
     description TEXT,
@@ -97,6 +99,7 @@ CREATE TABLE product_tiers (
     CONSTRAINT unique_product_tier UNIQUE(product_id, name)
 );
 
+<<<<<<< Updated upstream
 -- Templates for reusable components (global)
 CREATE TABLE fractile_templates (
     id SERIAL PRIMARY KEY,
@@ -124,6 +127,15 @@ CREATE TABLE tier_templates (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+=======
+ALTER TABLE product_cells
+ADD CONSTRAINT fk_product_cells_tier
+FOREIGN KEY (tier_id) REFERENCES product_tiers(id) ON DELETE CASCADE;
+
+ALTER TABLE product_fractiles
+ADD CONSTRAINT fk_product_fractiles_cell
+FOREIGN KEY (cell_id) REFERENCES product_cells(id) ON DELETE CASCADE;
+>>>>>>> Stashed changes
 
 CREATE TABLE batches (
     id SERIAL PRIMARY KEY,
@@ -153,8 +165,12 @@ CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_products_unit ON products(unit_id);
 CREATE INDEX idx_products_type ON products(type);
 CREATE INDEX idx_product_fractiles_product ON product_fractiles(product_id);
+CREATE INDEX idx_product_fractiles_cell ON product_fractiles(cell_id);
 CREATE INDEX idx_product_cells_product ON product_cells(product_id);
+CREATE INDEX idx_product_cells_tier ON product_cells(tier_id);
 CREATE INDEX idx_product_tiers_product ON product_tiers(product_id);
+CREATE UNIQUE INDEX ux_product_cells_tier_unique ON product_cells(tier_id) WHERE tier_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_product_fractiles_cell_unique ON product_fractiles(cell_id) WHERE cell_id IS NOT NULL;
 CREATE INDEX idx_batches_product ON batches(product_id);
 CREATE INDEX idx_batches_unit ON batches(unit_id);
 CREATE INDEX idx_batches_batch_number ON batches(batch_number);
