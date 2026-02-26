@@ -1,6 +1,6 @@
 import Product from "../models/Product.js";
 import ProductComponent from "../models/ProductComponent.js";
-import Tier from "../models/Tier.js";
+import ComponentTemplate from "../models/ComponentTemplate.js";
 
 class ProductController {
   // Create product with components
@@ -21,35 +21,23 @@ class ProductController {
         });
       }
 
-      const hierarchy = await Tier.getHierarchyDetailsById(tier_id);
+      // Get hierarchy from tier_templates (not product_tiers)
+      const hierarchy = await ComponentTemplate.getTierHierarchy(tier_id);
 
       if (!hierarchy) {
         return res.status(404).json({
           success: false,
-          message: "Tier not found",
+          message: "Tier template not found",
         });
       }
 
-      if (!hierarchy.cell || !hierarchy.fractile) {
-        return res.status(400).json({
-          success: false,
-          message: "Tier hierarchy is incomplete (missing cell or fractile)",
-        });
-      }
-
-      const unit_id = hierarchy.tier.unit_id;
+      // Use user's unit_id since templates don't have unit_id
+      const unit_id = req.user.unit_id;
 
       if (!unit_id) {
         return res.status(400).json({
           success: false,
-          message: "Unable to resolve unit from tier hierarchy",
-        });
-      }
-
-      if (req.user.role !== "admin" && unit_id !== req.user.unit_id) {
-        return res.status(403).json({
-          success: false,
-          message: "Access denied to this tier",
+          message: "User must be assigned to a unit",
         });
       }
 
@@ -61,6 +49,13 @@ class ProductController {
         specifications,
         created_by: req.user.id,
         tier_id,
+        // Pass hierarchy info for creating product components
+        tierName: hierarchy.tier.name,
+        tierDescription: hierarchy.tier.description,
+        cellName: hierarchy.cell.name,
+        cellDescription: hierarchy.cell.description,
+        fractileName: hierarchy.fractile.name,
+        fractileDescription: hierarchy.fractile.description,
       };
 
       const product = await Product.create(productData);

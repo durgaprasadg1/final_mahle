@@ -6,6 +6,9 @@ const router = express.Router();
 
 router.use(authenticate);
 
+// Get tier hierarchy (for product creation)
+router.get("/tiers/:id/hierarchy", TemplateController.getTierHierarchy);
+
 // endpoints: /api/templates/fractiles, /api/templates/cells, /api/templates/tiers
 router.get("/:type", TemplateController.listTemplates);
 router.post(
