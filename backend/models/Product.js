@@ -12,6 +12,14 @@ class Product {
       specifications,
       created_by,
       tier_id,
+      // Hierarchy info from templates (passed from controller)
+      tierName,
+      tierDescription,
+      cellName,
+      cellDescription,
+      fractileName,
+      fractileDescription,
+      // Legacy array-based approach
       fractiles,
       cells,
       tiers,
@@ -44,85 +52,34 @@ class Product {
       const productResult = await client.query(productQuery, productValues);
       const product = productResult.rows[0];
 
-      if (tier_id) {
-        const hierarchyQuery = `
-          SELECT
-            t.id AS tier_id,
-            t.name AS tier_name,
-            t.count AS tier_count,
-            t.description AS tier_description,
-            c.id AS cell_id,
-            c.name AS cell_name,
-            c.count AS cell_count,
-            c.description AS cell_description,
-            f.id AS fractile_id,
-            f.name AS fractile_name,
-            f.count AS fractile_count,
-            f.description AS fractile_description
-          FROM product_tiers t
-          LEFT JOIN product_cells c ON c.tier_id = t.id
-          LEFT JOIN product_fractiles f ON f.cell_id = c.id
-          WHERE t.id = $1
-          ORDER BY c.created_at ASC NULLS LAST, f.created_at ASC NULLS LAST
-          LIMIT 1
-        `;
-
-        const hierarchyResult = await client.query(hierarchyQuery, [tier_id]);
-
-        if (!hierarchyResult.rows.length) {
-          throw new Error("Tier not found");
-        }
-
-        const sourceHierarchy = hierarchyResult.rows[0];
-
-        if (!sourceHierarchy.cell_id || !sourceHierarchy.fractile_id) {
-          throw new Error(
-            "Tier hierarchy is incomplete (missing cell or fractile)",
-          );
-        }
-
+      // If tier_id and hierarchy info is provided (from templates)
+      if (tier_id && tierName) {
+        // Insert tier
         const insertedTierResult = await client.query(
           `INSERT INTO product_tiers (product_id, name, count, description)
            VALUES ($1, $2, $3, $4)
            RETURNING *`,
-          [
-            product.id,
-            sourceHierarchy.tier_name,
-            sourceHierarchy.tier_count || 0,
-            sourceHierarchy.tier_description,
-          ],
+          [product.id, tierName, 0, tierDescription]
         );
-
         const insertedTier = insertedTierResult.rows[0];
 
+        // Insert cell linked to tier
         const insertedCellResult = await client.query(
           `INSERT INTO product_cells (product_id, tier_id, name, count, description)
            VALUES ($1, $2, $3, $4, $5)
            RETURNING *`,
-          [
-            product.id,
-            insertedTier.id,
-            sourceHierarchy.cell_name,
-            sourceHierarchy.cell_count || 0,
-            sourceHierarchy.cell_description,
-          ],
+          [product.id, insertedTier.id, cellName, 0, cellDescription]
         );
-
         const insertedCell = insertedCellResult.rows[0];
 
+        // Insert fractile linked to cell
         await client.query(
           `INSERT INTO product_fractiles (product_id, cell_id, name, count, description)
            VALUES ($1, $2, $3, $4, $5)`,
-          [
-            product.id,
-            insertedCell.id,
-            sourceHierarchy.fractile_name,
-            sourceHierarchy.fractile_count || 0,
-            sourceHierarchy.fractile_description,
-          ],
+          [product.id, insertedCell.id, fractileName, 0, fractileDescription]
         );
       } else {
-        // Backward-compatible component insertion
+        // Backward-compatible component insertion (legacy array approach)
         if (fractiles && fractiles.length > 0) {
           for (const fractile of fractiles) {
             await client.query(
