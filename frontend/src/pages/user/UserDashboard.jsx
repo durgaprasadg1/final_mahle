@@ -201,64 +201,47 @@ const UserDashboard = () => {
     name: "",
     type: "",
     description: "",
-    fractiles: [],
-    cells: [],
-    tiers: [],
+    tier_id: "",
   });
 
-  const [componentInput, setComponentInput] = useState({
-    fractile: "",
-    cell: "",
-    tier: "",
-  });
-  const [componentSelect, setComponentSelect] = useState({
-    fractileSelect: "",
-    cellSelect: "",
-    tierSelect: "",
-  });
-  const [showCustom, setShowCustom] = useState({
-    fractile: false,
-    cell: false,
-    tier: false,
-  });
+  // Selected tier hierarchy info (fetched when tier is selected)
+  const [selectedTierHierarchy, setSelectedTierHierarchy] = useState(null);
 
-  const [fractileOptions, setFractileOptions] = useState([
-    "Fractile-A",
-    "Fractile-B",
-    "Fractile-C",
-    "Fractile-D",
-    "Fractile-E",
-  ]);
-  const [cellOptions, setCellOptions] = useState([
-    "Cell-Type-1",
-    "Cell-Type-2",
-    "Cell-Type-3",
-    "Cell-Type-4",
-  ]);
-  const [tierOptions, setTierOptions] = useState([
-    "Top-Tier",
-    "Middle-Tier",
-    "Bottom-Tier",
-  ]);
+  // All tiers loaded with their hierarchy info
+  const [allTiers, setAllTiers] = useState([]);
 
-  const fetchComponentTemplates = async () => {
+  // Fetch all tiers with hierarchy info
+  const fetchAllTiers = async () => {
     try {
       const api = await import("../../lib/api");
-      const [fRes, cRes, tRes] = await Promise.all([
-        api.templateAPI.list("fractiles"),
-        api.templateAPI.list("cells"),
-        api.templateAPI.list("tiers"),
-      ]);
-      setFractileOptions(fRes.data.data.map((r) => r.name));
-      setCellOptions(cRes.data.data.map((r) => r.name));
-      setTierOptions(tRes.data.data.map((r) => r.name));
+      const res = await api.templateAPI.list("tiers");
+      // res.data.data contains tiers with cell_name, fractile_name, cell_id, fractile_id
+      setAllTiers(res.data.data);
     } catch (e) {
-      // keep defaults if backend unavailable
+      console.error("Failed to fetch tiers");
+    }
+  };
+
+  // Handle tier selection - lookup hierarchy from allTiers
+  const handleTierSelect = (tierId) => {
+    setProductForm(prev => ({ ...prev, tier_id: tierId }));
+    if (!tierId) {
+      setSelectedTierHierarchy(null);
+      return;
+    }
+    // Find the selected tier from allTiers
+    const tier = allTiers.find(t => String(t.id) === String(tierId));
+    if (tier) {
+      setSelectedTierHierarchy({
+        tier: { id: tier.id, name: tier.name },
+        cell: { id: tier.cell_id, name: tier.cell_name },
+        fractile: { id: tier.fractile_id, name: tier.fractile_name },
+      });
     }
   };
 
   useEffect(() => {
-    fetchComponentTemplates();
+    fetchAllTiers();
   }, []);
 
   const [batchForm, setBatchForm] = useState({
@@ -330,66 +313,6 @@ const UserDashboard = () => {
     }
   };
 
-  const addFractile = () => {
-    const value = componentInput.fractile.trim();
-    if (value) {
-      setProductForm({
-        ...productForm,
-        fractiles: [...productForm.fractiles, { name: value, count: 0 }],
-      });
-      setComponentInput({ ...componentInput, fractile: "" });
-      setShowCustom({ ...showCustom, fractile: false });
-      setComponentSelect({ ...componentSelect, fractileSelect: "" });
-    }
-  };
-
-  const addCell = () => {
-    const value = componentInput.cell.trim();
-    if (value) {
-      setProductForm({
-        ...productForm,
-        cells: [...productForm.cells, { name: value, count: 0 }],
-      });
-      setComponentInput({ ...componentInput, cell: "" });
-      setShowCustom({ ...showCustom, cell: false });
-      setComponentSelect({ ...componentSelect, cellSelect: "" });
-    }
-  };
-
-  const addTier = () => {
-    const value = componentInput.tier.trim();
-    if (value) {
-      setProductForm({
-        ...productForm,
-        tiers: [...productForm.tiers, { name: value, count: 0 }],
-      });
-      setComponentInput({ ...componentInput, tier: "" });
-      setShowCustom({ ...showCustom, tier: false });
-      setComponentSelect({ ...componentSelect, tierSelect: "" });
-    }
-  };
-
-  const removeFractile = (index) => {
-    setProductForm({
-      ...productForm,
-      fractiles: productForm.fractiles.filter((_, i) => i !== index),
-    });
-  };
-
-  const removeCell = (index) => {
-    setProductForm({
-      ...productForm,
-      cells: productForm.cells.filter((_, i) => i !== index),
-    });
-  };
-
-  const removeTier = (index) => {
-    setProductForm({
-      ...productForm,
-      tiers: productForm.tiers.filter((_, i) => i !== index),
-    });
-  };
-
   const handleEditProduct = (product) => {
     setIsEditMode(true);
     setEditingProductId(product.id);
@@ -397,10 +320,14 @@ const UserDashboard = () => {
       name: product.name,
       type: product.type,
       description: product.description || "",
-      fractiles: Array.isArray(product.fractiles) ? product.fractiles : [],
-      cells: Array.isArray(product.cells) ? product.cells : [],
-      tiers: Array.isArray(product.tiers) ? product.tiers : [],
+      tier_id: product.tier_id || "",
     });
+    // Load hierarchy for edit mode if tier_id exists
+    if (product.tier_id) {
+      handleTierSelect(product.tier_id);
+    } else {
+      setSelectedTierHierarchy(null);
+    }
     setShowProductModal(true);
   };
 
@@ -415,14 +342,16 @@ const UserDashboard = () => {
       toast.error("Please select a product type");
       return;
     }
+    if (!productForm.tier_id) {
+      toast.error("Please select a tier");
+      return;
+    }
     try {
       const payload = {
         name: productForm.name,
         type: productForm.type,
         description: productForm.description,
-        fractiles: productForm.fractiles,
-        cells: productForm.cells,
-        tiers: productForm.tiers,
+        tier_id: parseInt(productForm.tier_id),
       };
 
       if (isEditMode && editingProductId) {
@@ -440,11 +369,9 @@ const UserDashboard = () => {
         name: "",
         type: "",
         description: "",
-        fractiles: [],
-        cells: [],
-        tiers: [],
+        tier_id: "",
       });
-      setComponentInput({ fractile: "", cell: "", tier: "" });
+      setSelectedTierHierarchy(null);
       fetchProducts();
     } catch (error) {
       toast.error(
@@ -1178,11 +1105,9 @@ const UserDashboard = () => {
                 name: "",
                 type: "",
                 description: "",
-                fractiles: [],
-                cells: [],
-                tiers: [],
+                tier_id: "",
               });
-              setComponentInput({ fractile: "", cell: "", tier: "" });
+              setSelectedTierHierarchy(null);
             }
           }}
         >
@@ -1226,178 +1151,40 @@ const UserDashboard = () => {
               </div>
 
               <div className="space-y-4 border-t pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="fractile" className="text-sm">
-                      Fractiles
-                    </Label>
-                    <div className="flex gap-2">
-                      <Select
-                        id="fractile"
-                        value={componentSelect.fractileSelect}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "create_new") {
-                            setShowCustom({ ...showCustom, fractile: true });
-                            setComponentSelect({
-                              ...componentSelect,
-                              fractileSelect: "",
-                            });
-                          } else if (val) {
-                            setProductForm({
-                              ...productForm,
-                              fractiles: [
-                                ...productForm.fractiles,
-                                { name: val, count: 0 },
-                              ],
-                            });
-                            setComponentSelect({
-                              ...componentSelect,
-                              fractileSelect: "",
-                            });
-                          }
-                        }}
-                      >
-                        <option value="">Select Fractile</option>
-                        {fractileOptions.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                    {productForm.fractiles.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {productForm.fractiles.map((f, idx) => (
-                          <Badge key={idx} variant="secondary">
-                            {f.name}
-                            <button
-                              type="button"
-                              onClick={() => removeFractile(idx)}
-                              className="ml-2 hover:text-red-500"
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="cell" className="text-sm">
-                      Cells
-                    </Label>
-                    <div className="flex gap-2">
-                      <Select
-                        id="cell"
-                        value={componentSelect.cellSelect}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "create_new") {
-                            setShowCustom({ ...showCustom, cell: true });
-                            setComponentSelect({
-                              ...componentSelect,
-                              cellSelect: "",
-                            });
-                          } else if (val) {
-                            setProductForm({
-                              ...productForm,
-                              cells: [
-                                ...productForm.cells,
-                                { name: val, count: 0 },
-                              ],
-                            });
-                            setComponentSelect({
-                              ...componentSelect,
-                              cellSelect: "",
-                            });
-                          }
-                        }}
-                      >
-                        <option value="">Select Cell</option>
-                        {cellOptions.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                    {productForm.cells.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {productForm.cells.map((c, idx) => (
-                          <Badge key={idx} variant="secondary">
-                            {c.name}
-                            <button
-                              type="button"
-                              onClick={() => removeCell(idx)}
-                              className="ml-2 hover:text-red-500"
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="tier" className="text-sm">
-                      Tiers
-                    </Label>
-                    <div className="flex gap-2">
-                      <Select
-                        id="tier"
-                        value={componentSelect.tierSelect}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "create_new") {
-                            setShowCustom({ ...showCustom, tier: true });
-                            setComponentSelect({
-                              ...componentSelect,
-                              tierSelect: "",
-                            });
-                          } else if (val) {
-                            setProductForm({
-                              ...productForm,
-                              tiers: [
-                                ...productForm.tiers,
-                                { name: val, count: 0 },
-                              ],
-                            });
-                            setComponentSelect({
-                              ...componentSelect,
-                              tierSelect: "",
-                            });
-                          }
-                        }}
-                      >
-                        <option value="">Select Tier</option>
-                        {tierOptions.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                    {productForm.tiers.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {productForm.tiers.map((t, idx) => (
-                          <Badge key={idx} variant="secondary">
-                            {t.name}
-                            <button
-                              type="button"
-                              onClick={() => removeTier(idx)}
-                              className="ml-2 hover:text-red-500"
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tier" className="text-sm">
+                    Tier *
+                  </Label>
+                  <p className="text-xs text-gray-500">
+                    Select a tier - the associated Fractile and Cell will be automatically linked
+                  </p>
+                  <Select
+                    id="tier"
+                    value={productForm.tier_id}
+                    onChange={(e) => handleTierSelect(e.target.value)}
+                  >
+                    <option value="">Select Tier</option>
+                    {allTiers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.fractile_name} → {t.cell_name})
+                      </option>
+                    ))}
+                  </Select>
                 </div>
+
+                {/* Show selected hierarchy summary */}
+                {selectedTierHierarchy && (
+                  <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
+                    <p className="text-sm font-medium text-blue-800">Linked Hierarchy:</p>
+                    <div className="flex items-center gap-2 text-sm text-blue-700 mt-1">
+                      <Badge className="bg-blue-100 text-blue-800">{selectedTierHierarchy.fractile?.name}</Badge>
+                      <span>→</span>
+                      <Badge className="bg-green-100 text-green-800">{selectedTierHierarchy.cell?.name}</Badge>
+                      <span>→</span>
+                      <Badge className="bg-purple-100 text-purple-800">{selectedTierHierarchy.tier?.name}</Badge>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
