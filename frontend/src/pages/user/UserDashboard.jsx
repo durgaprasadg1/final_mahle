@@ -68,6 +68,7 @@ const UserDashboard = () => {
   const [usePreviousBatch, setUsePreviousBatch] = useState(false);
   const [selectedPreviousBatchId, setSelectedPreviousBatchId] = useState("");
   const [filteredPreviousBatches, setFilteredPreviousBatches] = useState([]);
+  const [delayDialogBatch, setDelayDialogBatch] = useState(null);
 
   const VALID_SHIFT_TYPES = ["morning", "afternoon", "night"];
 
@@ -128,12 +129,13 @@ const UserDashboard = () => {
 
     const headers = [
       "ID",
-      "Batch Number",
       "Product",
       "Quantity",
       "Shift",
       "Start Time",
       "End Time",
+      "Delay",
+      "Delay Reason",
       "Notes",
       "Filled By",
       "Date",
@@ -141,12 +143,13 @@ const UserDashboard = () => {
 
     const rows = reportResults.map((b) => [
       b.id,
-      b.batch_number,
       b.product_name,
       b.quantity_produced,
       b.shift,
       b.start_time,
       b.end_time,
+      b.had_delay || "no",
+      (b.delay_reason || "").replace(/,/g, " "),
       (b.notes || "").replace(/,/g, " "),
       b.created_by_name,
       formatDateOnly(b.created_at),
@@ -203,7 +206,7 @@ const UserDashboard = () => {
   // Helper function to get unique previous batches (latest one per product)
   const getUniquePreviousBatches = () => {
     if (batches.length === 0) return [];
-    
+
     // Sort batches by creation date (newest first)
     const sortedBatches = [...batches].sort((a, b) => {
       const dateA = new Date(a.created_at || 0);
@@ -214,21 +217,37 @@ const UserDashboard = () => {
     // Get the latest batch for each product
     const seenProducts = new Set();
     const uniqueBatches = [];
-    
+
     for (const batch of sortedBatches) {
       if (!seenProducts.has(batch.product_id)) {
         uniqueBatches.push(batch);
         seenProducts.add(batch.product_id);
       }
     }
-    
+
     return uniqueBatches;
+  };
+
+  // Helper function to get previous batches for a specific product
+  const getPreviousBatchesForProduct = (productId) => {
+    if (!productId || batches.length === 0) return [];
+
+    // Sort batches by creation date (newest first) for the specific product
+    const productBatches = batches
+      .filter((b) => String(b.product_id) === String(productId))
+      .sort((a, b) => {
+        const dateA = new Date(a.created_at || 0);
+        const dateB = new Date(b.created_at || 0);
+        return dateB - dateA;
+      });
+
+    return productBatches;
   };
 
   // Helper function to copy data from previous batch
   const copyFromPreviousBatch = (batch) => {
     if (!batch) return;
-    
+
     setBatchForm({
       product_id: String(batch.product_id),
       quantity_produced: String(batch.quantity_produced),
@@ -286,13 +305,13 @@ const UserDashboard = () => {
 
   // Handle tier selection - lookup hierarchy from allTiers
   const handleTierSelect = (tierId) => {
-    setProductForm(prev => ({ ...prev, tier_id: tierId }));
+    setProductForm((prev) => ({ ...prev, tier_id: tierId }));
     if (!tierId) {
       setSelectedTierHierarchy(null);
       return;
     }
     // Find the selected tier from allTiers
-    const tier = allTiers.find(t => String(t.id) === String(tierId));
+    const tier = allTiers.find((t) => String(t.id) === String(tierId));
     if (tier) {
       setSelectedTierHierarchy({
         tier: { id: tier.id, name: tier.name },
@@ -486,7 +505,8 @@ const UserDashboard = () => {
         shift: batchForm.shift || "morning",
         notes: batchForm.notes,
         had_delay: batchForm.had_delay,
-        delay_reason: batchForm.had_delay === "yes" ? batchForm.delay_reason : "",
+        delay_reason:
+          batchForm.had_delay === "yes" ? batchForm.delay_reason : "",
       };
 
       await batchAPI.create(payload);
@@ -798,7 +818,7 @@ const UserDashboard = () => {
       setUsePreviousBatch(false);
       setSelectedPreviousBatchId("");
       setFilteredPreviousBatches([]);
-      
+
       const shiftConfigs = loadBatchShiftConfigs();
       setAvailableShifts(shiftConfigs);
 
@@ -1111,10 +1131,12 @@ const UserDashboard = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Batch Number</TableHead>
                     <TableHead>Product</TableHead>
+                    <TableHead>Product Type</TableHead>
                     <TableHead>Quantity</TableHead>
-                    <TableHead>Slot Start</TableHead>
+                    <TableHead>Slot</TableHead>
+                    <TableHead>Shift</TableHead>
+                    <TableHead>Delay</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Filled By</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -1123,14 +1145,36 @@ const UserDashboard = () => {
                 <TableBody>
                   {batches.map((batch) => (
                     <TableRow key={batch.id}>
-                      <TableCell className="font-medium font-mono text-xs">
-                        {batch.batch_number}
-                      </TableCell>
                       <TableCell>{batch.product_name}</TableCell>
+                      <TableCell className="capitalize">
+                        {batch.product_type?.replace(/_/g, " ") || "-"}
+                      </TableCell>
                       <TableCell className="font-semibold">
                         {batch.quantity_produced}
                       </TableCell>
-                      <TableCell>{formatSlotStart(batch.start_time)}</TableCell>
+                      <TableCell className="text-sm">
+                        {batch.start_time} - {batch.end_time}
+                      </TableCell>
+                      <TableCell className="capitalize">
+                        {batch.shift}
+                      </TableCell>
+                      <TableCell>
+                        {batch.had_delay === "yes" ? (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="destructive">Yes</Badge>
+                            {batch.delay_reason && (
+                              <button
+                                onClick={() => setDelayDialogBatch(batch)}
+                                className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                              >
+                                View Reason
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <Badge variant="secondary">No</Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="success">{batch.status}</Badge>
                       </TableCell>
@@ -1237,7 +1281,8 @@ const UserDashboard = () => {
                     Tier *
                   </Label>
                   <p className="text-xs text-gray-500">
-                    Select a tier - the associated Fractile and Cell will be automatically linked
+                    Select a tier - the associated Fractile and Cell will be
+                    automatically linked
                   </p>
                   <Select
                     id="tier"
@@ -1256,13 +1301,21 @@ const UserDashboard = () => {
                 {/* Show selected hierarchy summary */}
                 {selectedTierHierarchy && (
                   <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
-                    <p className="text-sm font-medium text-blue-800">Linked Hierarchy:</p>
+                    <p className="text-sm font-medium text-blue-800">
+                      Linked Hierarchy:
+                    </p>
                     <div className="flex items-center gap-2 text-sm text-blue-700 mt-1">
-                      <Badge className="bg-blue-100 text-blue-800">{selectedTierHierarchy.fractile?.name}</Badge>
+                      <Badge className="bg-blue-100 text-blue-800">
+                        {selectedTierHierarchy.fractile?.name}
+                      </Badge>
                       <span>→</span>
-                      <Badge className="bg-green-100 text-green-800">{selectedTierHierarchy.cell?.name}</Badge>
+                      <Badge className="bg-green-100 text-green-800">
+                        {selectedTierHierarchy.cell?.name}
+                      </Badge>
                       <span>→</span>
-                      <Badge className="bg-purple-100 text-purple-800">{selectedTierHierarchy.tier?.name}</Badge>
+                      <Badge className="bg-purple-100 text-purple-800">
+                        {selectedTierHierarchy.tier?.name}
+                      </Badge>
                     </div>
                   </div>
                 )}
@@ -1301,8 +1354,8 @@ const UserDashboard = () => {
 
       {/* Create Batch Modal */}
       {activeTab === "batches" && (
-        <Dialog 
-          open={showBatchModal} 
+        <Dialog
+          open={showBatchModal}
           onOpenChange={(open) => {
             setShowBatchModal(open);
             if (!open) {
@@ -1317,27 +1370,70 @@ const UserDashboard = () => {
               <DialogTitle>Record Production Batch</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleCreateBatch} className="space-y-4 mt-4">
-              {/* Option to copy from previous batch */}
+              {/* Product Selection - Always visible */}
+              <div className="space-y-2">
+                <Label htmlFor="batchProduct">Product *</Label>
+                <Select
+                  id="batchProduct"
+                  value={batchForm.product_id}
+                  onChange={(e) => {
+                    const productId = e.target.value;
+                    setBatchForm({
+                      ...batchForm,
+                      product_id: productId,
+                    });
+                    // Reset previous batch selection when product changes
+                    if (usePreviousBatch) {
+                      setUsePreviousBatch(false);
+                      setSelectedPreviousBatchId("");
+                      setFilteredPreviousBatches([]);
+                    }
+                  }}
+                  required
+                  disabled={usePreviousBatch}
+                >
+                  <option value="">Select Product</option>
+                  {products.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name} ({formatProductType(product.type)})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
               <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <label className="flex items-center gap-3 cursor-pointer">
+                <label
+                  className={`flex items-center gap-3 ${
+                    batchForm.product_id &&
+                    getPreviousBatchesForProduct(batchForm.product_id).length >
+                      0
+                      ? "cursor-pointer"
+                      : "cursor-not-allowed opacity-50"
+                  }`}
+                >
                   <input
                     type="checkbox"
                     checked={usePreviousBatch}
                     onChange={(e) => {
                       const checked = e.target.checked;
                       setUsePreviousBatch(checked);
-                      if (checked) {
-                        const uniqueBatches = getUniquePreviousBatches();
-                        setFilteredPreviousBatches(uniqueBatches);
+                      if (checked && batchForm.product_id) {
+                        const productBatches = getPreviousBatchesForProduct(
+                          batchForm.product_id,
+                        );
+                        setFilteredPreviousBatches(productBatches);
                         // Auto-select the first previous batch if available
-                        if (uniqueBatches.length > 0) {
-                          setSelectedPreviousBatchId(String(uniqueBatches[0].id));
-                          copyFromPreviousBatch(uniqueBatches[0]);
+                        if (productBatches.length > 0) {
+                          setSelectedPreviousBatchId(
+                            String(productBatches[0].id),
+                          );
+                          copyFromPreviousBatch(productBatches[0]);
                         }
                       } else {
-                        // Reset form when unchecking
+                        // Keep product_id when unchecking
+                        const currentProductId = batchForm.product_id;
                         setBatchForm({
-                          product_id: "",
+                          product_id: currentProductId,
                           quantity_produced: "",
                           start_time: "",
                           end_time: "",
@@ -1352,19 +1448,35 @@ const UserDashboard = () => {
                         setBatchTimeSlots([]);
                       }
                     }}
+                    disabled={
+                      !batchForm.product_id ||
+                      getPreviousBatchesForProduct(batchForm.product_id)
+                        .length === 0
+                    }
                     className="w-5 h-5 cursor-pointer"
                   />
                   <span className="font-semibold text-sm text-blue-900">
-                    Copy from Previous Batch
+                   Same as Previous Batch
+                    {batchForm.product_id &&
+                      getPreviousBatchesForProduct(batchForm.product_id)
+                        .length === 0 && (
+                        <span className="font-normal text-xs ml-2">
+                          (No previous batches for this product)
+                        </span>
+                      )}
+                    {!batchForm.product_id && (
+                      <span className="font-normal text-xs ml-2">
+                        (Select a product first)
+                      </span>
+                    )}
                   </span>
                 </label>
-                <p className="text-xs text-blue-700 ml-8">
-                  Select a previously created batch and only the time slot can be changed. All other information will be copied automatically.
-                </p>
 
                 {usePreviousBatch && (
                   <div className="mt-3 ml-8 space-y-2">
-                    <Label htmlFor="previousBatch">Select Previous Batch *</Label>
+                    <Label htmlFor="previousBatch">
+                      Select Previous Batch *
+                    </Label>
                     <Select
                       id="previousBatch"
                       value={selectedPreviousBatchId}
@@ -1372,7 +1484,7 @@ const UserDashboard = () => {
                         const batchId = e.target.value;
                         setSelectedPreviousBatchId(batchId);
                         const selectedBatch = filteredPreviousBatches.find(
-                          (b) => String(b.id) === batchId
+                          (b) => String(b.id) === batchId,
                         );
                         if (selectedBatch) {
                           copyFromPreviousBatch(selectedBatch);
@@ -1383,38 +1495,22 @@ const UserDashboard = () => {
                       <option value="">Select a batch to copy</option>
                       {filteredPreviousBatches.map((batch) => (
                         <option key={batch.id} value={String(batch.id)}>
-                          {batch.product_name} - {batch.batch_number} (Qty: {batch.quantity_produced}, Shift: {batch.shift})
+                          {batch.start_time} to {batch.end_time} (Qty:{" "}
+                          {batch.quantity_produced}, Shift: {batch.shift})
                         </option>
                       ))}
                     </Select>
                     {filteredPreviousBatches.length === 0 && (
-                      <p className="text-xs text-gray-500">No previous batches available</p>
+                      <p className="text-xs text-gray-500">
+                        No previous batches available for this product
+                      </p>
                     )}
                   </div>
                 )}
               </div>
 
-              {/* Product & Quantity fields - only show when NOT copying from previous */}
+              {/* Quantity field - only show when NOT copying from previous */}
               {!usePreviousBatch && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="batchProduct">Product *</Label>
-                  <Select
-                    id="batchProduct"
-                    value={batchForm.product_id}
-                    onChange={(e) =>
-                      setBatchForm({ ...batchForm, product_id: e.target.value })
-                    }
-                    required
-                  >
-                    <option value="">Select Product</option>
-                    {products.map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name} ({formatProductType(product.type)})
-                      </option>
-                    ))}
-                  </Select>
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="quantity">Quantity Produced *</Label>
                   <Input
@@ -1431,15 +1527,16 @@ const UserDashboard = () => {
                     required
                   />
                 </div>
-              </div>
               )}
-              
+
               {/* Shift Selection - always visible but should respect copied batch shift */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Label>Shift *</Label>
                   {usePreviousBatch && (
-                    <span className="text-xs text-gray-500">(from previous batch)</span>
+                    <span className="text-xs text-gray-500">
+                      (from previous batch)
+                    </span>
                   )}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -1486,7 +1583,6 @@ const UserDashboard = () => {
                 <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-64 overflow-y-auto bg-gray-50">
                   {batchTimeSlots
                     .filter((slot) => {
-                      // Don't show slots that have already been used for this product TODAY
                       const isCurrentSlotSelected =
                         batchForm.start_time === slot.startTime &&
                         batchForm.end_time === slot.endTime;
@@ -1538,7 +1634,9 @@ const UserDashboard = () => {
                           }}
                           className="w-4 h-4 cursor-pointer"
                         />
-                        <span className="text-sm font-medium">{slot.label}</span>
+                        <span className="text-sm font-medium">
+                          {slot.label}
+                        </span>
                       </label>
                     ))}
                 </div>
@@ -1566,7 +1664,9 @@ const UserDashboard = () => {
               <div className="space-y-2">
                 <Label>Production Delay Occurred? *</Label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <label className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${batchForm.had_delay === "yes" ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"}`}>
+                  <label
+                    className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${batchForm.had_delay === "yes" ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"}`}
+                  >
                     <input
                       type="checkbox"
                       checked={batchForm.had_delay === "yes"}
@@ -1575,14 +1675,22 @@ const UserDashboard = () => {
                       }
                       className="w-4 h-4 cursor-pointer"
                     />
-                    <span className="text-sm font-medium">Yes, delay occurred</span>
+                    <span className="text-sm font-medium">
+                      Yes, delay occurred
+                    </span>
                   </label>
-                  <label className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${batchForm.had_delay === "no" ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"}`}>
+                  <label
+                    className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${batchForm.had_delay === "no" ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"}`}
+                  >
                     <input
                       type="checkbox"
                       checked={batchForm.had_delay === "no"}
                       onChange={() =>
-                        setBatchForm({ ...batchForm, had_delay: "no", delay_reason: "" })
+                        setBatchForm({
+                          ...batchForm,
+                          had_delay: "no",
+                          delay_reason: "",
+                        })
                       }
                       className="w-4 h-4 cursor-pointer"
                     />
@@ -1593,13 +1701,18 @@ const UserDashboard = () => {
               {batchForm.had_delay === "yes" && (
                 <div className="space-y-2 animate-in fade-in">
                   <Label htmlFor="delayReason">Reason for Delay *</Label>
-                  <p className="text-xs text-gray-500">Describe the cause of the production delay</p>
+                  <p className="text-xs text-gray-500">
+                    Describe the cause of the production delay
+                  </p>
                   <Textarea
                     id="delayReason"
                     placeholder="Exa : Equipment malfunction, Power outage, etc."
                     value={batchForm.delay_reason}
                     onChange={(e) =>
-                      setBatchForm({ ...batchForm, delay_reason: e.target.value })
+                      setBatchForm({
+                        ...batchForm,
+                        delay_reason: e.target.value,
+                      })
                     }
                     rows={3}
                     required={batchForm.had_delay === "yes"}
@@ -1757,6 +1870,44 @@ const UserDashboard = () => {
                 </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delay Reason Dialog */}
+      <Dialog
+        open={!!delayDialogBatch}
+        onOpenChange={() => setDelayDialogBatch(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delay Reason</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Product:</p>
+              <p className="font-medium">{delayDialogBatch?.product_name}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Shift:</p>
+              <p className="font-medium capitalize">
+                {delayDialogBatch?.shift}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Time Slot:</p>
+              <p className="font-medium">
+                {delayDialogBatch?.start_time} - {delayDialogBatch?.end_time}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Delay Reason:</p>
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm whitespace-pre-wrap">
+                  {delayDialogBatch?.delay_reason}
+                </p>
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
