@@ -65,6 +65,9 @@ const UserDashboard = () => {
   );
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportResults, setReportResults] = useState([]);
+  const [usePreviousBatch, setUsePreviousBatch] = useState(false);
+  const [selectedPreviousBatchId, setSelectedPreviousBatchId] = useState("");
+  const [filteredPreviousBatches, setFilteredPreviousBatches] = useState([]);
 
   const VALID_SHIFT_TYPES = ["morning", "afternoon", "night"];
 
@@ -197,6 +200,65 @@ const UserDashboard = () => {
     },
   ];
 
+  // Helper function to get unique previous batches (latest one per product)
+  const getUniquePreviousBatches = () => {
+    if (batches.length === 0) return [];
+    
+    // Sort batches by creation date (newest first)
+    const sortedBatches = [...batches].sort((a, b) => {
+      const dateA = new Date(a.created_at || 0);
+      const dateB = new Date(b.created_at || 0);
+      return dateB - dateA;
+    });
+
+    // Get the latest batch for each product
+    const seenProducts = new Set();
+    const uniqueBatches = [];
+    
+    for (const batch of sortedBatches) {
+      if (!seenProducts.has(batch.product_id)) {
+        uniqueBatches.push(batch);
+        seenProducts.add(batch.product_id);
+      }
+    }
+    
+    return uniqueBatches;
+  };
+
+  // Helper function to copy data from previous batch
+  const copyFromPreviousBatch = (batch) => {
+    if (!batch) return;
+    
+    setBatchForm({
+      product_id: String(batch.product_id),
+      quantity_produced: String(batch.quantity_produced),
+      start_time: "", // Will be set when user selects time slot
+      end_time: "", // Will be set when user selects time slot
+      shift: batch.shift || "morning",
+      notes: batch.notes || "",
+      had_delay: batch.had_delay || "no",
+      delay_reason: batch.delay_reason || "",
+    });
+
+    // Set the shift configuration
+    const shiftConfig =
+      availableShifts.find((s) => s.backendShift === batch.shift) ||
+      DEFAULT_SHIFT_CONFIGS.find((s) => s.backendShift === batch.shift);
+
+    if (shiftConfig) {
+      setSelectedShiftConfigId(String(shiftConfig.id));
+      const slots = generateTimeSlots(
+        shiftConfig.startTime,
+        shiftConfig.endTime,
+        shiftConfig.timeInterval,
+      );
+      setBatchTimeSlots(slots);
+      setBatchInterval(shiftConfig.timeInterval);
+    }
+
+    setSelectedBatchSlot(""); // Reset time slot selection
+  };
+
   const [productForm, setProductForm] = useState({
     name: "",
     type: "",
@@ -268,6 +330,8 @@ const UserDashboard = () => {
     end_time: "",
     shift: "morning",
     notes: "",
+    had_delay: "no",
+    delay_reason: "",
   });
 
   useEffect(() => {
@@ -476,6 +540,12 @@ const UserDashboard = () => {
         toast.error("End time must be different from start time");
         return;
       }
+      // Validate delay reason if delay is selected
+      if (batchForm.had_delay === "yes" && !batchForm.delay_reason.trim()) {
+        toast.error("Please provide a reason for the delay");
+        return;
+      }
+
       const toTimeString = (timeValue) => {
         if (!timeValue) return null;
         return timeValue.length === 5 ? `${timeValue}:00` : timeValue;
@@ -488,6 +558,8 @@ const UserDashboard = () => {
         end_time: toTimeString(batchForm.end_time),
         shift: batchForm.shift || "morning",
         notes: batchForm.notes,
+        had_delay: batchForm.had_delay,
+        delay_reason: batchForm.had_delay === "yes" ? batchForm.delay_reason : "",
       };
 
       await batchAPI.create(payload);
@@ -500,6 +572,8 @@ const UserDashboard = () => {
         end_time: "",
         shift: "morning",
         notes: "",
+        had_delay: "no",
+        delay_reason: "",
       });
       setSelectedBatchSlot("");
       setBatchTimeSlots([]);
@@ -531,6 +605,8 @@ const UserDashboard = () => {
       end_time: batch.end_time || "",
       shift: batch.shift || "morning",
       notes: batch.notes || "",
+      had_delay: batch.had_delay || "no",
+      delay_reason: batch.delay_reason || "",
     });
 
     const shiftConfig =
@@ -791,6 +867,11 @@ const UserDashboard = () => {
 
   useEffect(() => {
     if (showBatchModal) {
+      // Reset copy batch state when opening the modal
+      setUsePreviousBatch(false);
+      setSelectedPreviousBatchId("");
+      setFilteredPreviousBatches([]);
+      
       const shiftConfigs = loadBatchShiftConfigs();
       setAvailableShifts(shiftConfigs);
 
@@ -1433,15 +1514,104 @@ const UserDashboard = () => {
 
       {/* Create Batch Modal */}
       {activeTab === "batches" && (
-        <Dialog open={showBatchModal} onOpenChange={setShowBatchModal}>
+        <Dialog 
+          open={showBatchModal} 
+          onOpenChange={(open) => {
+            setShowBatchModal(open);
+            if (!open) {
+              setUsePreviousBatch(false);
+              setSelectedPreviousBatchId("");
+              setFilteredPreviousBatches([]);
+            }
+          }}
+        >
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Record Production Batch</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleCreateBatch} className="space-y-4 mt-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="batchProduct">Product *</Label>
+              {/* Option to copy from previous batch */}
+              <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={usePreviousBatch}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setUsePreviousBatch(checked);
+                      if (checked) {
+                        const uniqueBatches = getUniquePreviousBatches();
+                        setFilteredPreviousBatches(uniqueBatches);
+                        // Auto-select the first previous batch if available
+                        if (uniqueBatches.length > 0) {
+                          setSelectedPreviousBatchId(String(uniqueBatches[0].id));
+                          copyFromPreviousBatch(uniqueBatches[0]);
+                        }
+                      } else {
+                        // Reset form when unchecking
+                        setBatchForm({
+                          product_id: "",
+                          quantity_produced: "",
+                          start_time: "",
+                          end_time: "",
+                          shift: "morning",
+                          notes: "",
+                          had_delay: "no",
+                          delay_reason: "",
+                        });
+                        setSelectedPreviousBatchId("");
+                        setFilteredPreviousBatches([]);
+                        setSelectedBatchSlot("");
+                        setBatchTimeSlots([]);
+                      }
+                    }}
+                    className="w-5 h-5 cursor-pointer"
+                  />
+                  <span className="font-semibold text-sm text-blue-900">
+                    Copy from Previous Batch
+                  </span>
+                </label>
+                <p className="text-xs text-blue-700 ml-8">
+                  Select a previously created batch and only the time slot can be changed. All other information will be copied automatically.
+                </p>
+
+                {usePreviousBatch && (
+                  <div className="mt-3 ml-8 space-y-2">
+                    <Label htmlFor="previousBatch">Select Previous Batch *</Label>
+                    <Select
+                      id="previousBatch"
+                      value={selectedPreviousBatchId}
+                      onChange={(e) => {
+                        const batchId = e.target.value;
+                        setSelectedPreviousBatchId(batchId);
+                        const selectedBatch = filteredPreviousBatches.find(
+                          (b) => String(b.id) === batchId
+                        );
+                        if (selectedBatch) {
+                          copyFromPreviousBatch(selectedBatch);
+                        }
+                      }}
+                      required={usePreviousBatch}
+                    >
+                      <option value="">Select a batch to copy</option>
+                      {filteredPreviousBatches.map((batch) => (
+                        <option key={batch.id} value={String(batch.id)}>
+                          {batch.product_name} - {batch.batch_number} (Qty: {batch.quantity_produced}, Shift: {batch.shift})
+                        </option>
+                      ))}
+                    </Select>
+                    {filteredPreviousBatches.length === 0 && (
+                      <p className="text-xs text-gray-500">No previous batches available</p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Product & Quantity fields - only show when NOT copying from previous */}
+              {!usePreviousBatch && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="batchProduct">Product *</Label>
                   <Select
                     id="batchProduct"
                     value={batchForm.product_id}
@@ -1475,8 +1645,16 @@ const UserDashboard = () => {
                   />
                 </div>
               </div>
+              )}
+              
+              {/* Shift Selection - always visible but should respect copied batch shift */}
               <div className="space-y-2">
-                <Label>Shift *</Label>
+                <div className="flex items-center gap-2">
+                  <Label>Shift *</Label>
+                  {usePreviousBatch && (
+                    <span className="text-xs text-gray-500">(from previous batch)</span>
+                  )}
+                </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
                   {getShiftChoices().map((shiftConfig) => (
                     <label
@@ -1491,7 +1669,7 @@ const UserDashboard = () => {
                         )
                           ? "border-primary bg-primary/5"
                           : "border-gray-200"
-                      }`}
+                      } ${usePreviousBatch ? "opacity-60 cursor-not-allowed" : ""}`}
                     >
                       <input
                         type="radio"
@@ -1507,6 +1685,7 @@ const UserDashboard = () => {
                         onChange={() =>
                           applyShiftConfigToBatchForm(shiftConfig.id)
                         }
+                        disabled={usePreviousBatch}
                       />
                       <span className="text-sm">
                         {getShiftLabel(shiftConfig)}
@@ -1516,29 +1695,8 @@ const UserDashboard = () => {
                 </div>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="timeSlot">Time Slot *</Label>
-                <Select
-                  id="timeSlot"
-                  value={selectedBatchSlot}
-                  onChange={(e) => {
-                    const slotValue = e.target.value;
-                    setSelectedBatchSlot(slotValue);
-
-                    const selectedSlot = batchTimeSlots.find(
-                      (slot) => slot.value === slotValue,
-                    );
-
-                    if (!selectedSlot) return;
-
-                    setBatchForm((prev) => ({
-                      ...prev,
-                      start_time: selectedSlot.startTime,
-                      end_time: selectedSlot.endTime,
-                    }));
-                  }}
-                  required
-                >
-                  <option value="">Select slot</option>
+                <Label>Time Slot *</Label>
+                <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-64 overflow-y-auto bg-gray-50">
                   {batchTimeSlots
                     .filter((slot) => {
                       // Don't show slots that have already been used for this product TODAY
@@ -1572,11 +1730,36 @@ const UserDashboard = () => {
                       return !isUsed;
                     })
                     .map((slot) => (
-                      <option key={slot.value} value={slot.value}>
-                        {slot.label}
-                      </option>
+                      <label
+                        key={slot.value}
+                        className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${
+                          selectedBatchSlot === slot.value
+                            ? "border-primary bg-primary/10"
+                            : "border-gray-200 hover:border-gray-300"
+                        }`}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedBatchSlot === slot.value}
+                          onChange={() => {
+                            setSelectedBatchSlot(slot.value);
+                            setBatchForm((prev) => ({
+                              ...prev,
+                              start_time: slot.startTime,
+                              end_time: slot.endTime,
+                            }));
+                          }}
+                          className="w-4 h-4 cursor-pointer"
+                        />
+                        <span className="text-sm font-medium">{slot.label}</span>
+                      </label>
                     ))}
-                </Select>
+                </div>
+                {batchTimeSlots.length === 0 && (
+                  <p className="text-sm text-gray-500">
+                    No available slots for this product today.
+                  </p>
+                )}
                 <p className="text-xs text-gray-500">
                   Slot list is auto-generated from admin shift timing and
                   interval.
@@ -1593,6 +1776,49 @@ const UserDashboard = () => {
                   rows={3}
                 />
               </div>
+              <div className="space-y-2">
+                <Label>Production Delay Occurred? *</Label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <label className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${batchForm.had_delay === "yes" ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"}`}>
+                    <input
+                      type="checkbox"
+                      checked={batchForm.had_delay === "yes"}
+                      onChange={() =>
+                        setBatchForm({ ...batchForm, had_delay: "yes" })
+                      }
+                      className="w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-sm font-medium">Yes, delay occurred</span>
+                  </label>
+                  <label className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${batchForm.had_delay === "no" ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"}`}>
+                    <input
+                      type="checkbox"
+                      checked={batchForm.had_delay === "no"}
+                      onChange={() =>
+                        setBatchForm({ ...batchForm, had_delay: "no", delay_reason: "" })
+                      }
+                      className="w-4 h-4 cursor-pointer"
+                    />
+                    <span className="text-sm font-medium">No delay</span>
+                  </label>
+                </div>
+              </div>
+              {batchForm.had_delay === "yes" && (
+                <div className="space-y-2 animate-in fade-in">
+                  <Label htmlFor="delayReason">Reason for Delay *</Label>
+                  <p className="text-xs text-gray-500">Describe the cause of the production delay</p>
+                  <Textarea
+                    id="delayReason"
+                    placeholder="Exa : Equipment malfunction, Power outage, etc."
+                    value={batchForm.delay_reason}
+                    onChange={(e) =>
+                      setBatchForm({ ...batchForm, delay_reason: e.target.value })
+                    }
+                    rows={3}
+                    required={batchForm.had_delay === "yes"}
+                  />
+                </div>
+              )}
               <div className="flex justify-end space-x-2 pt-4">
                 <Button
                   type="button"
