@@ -13,13 +13,23 @@ class BatchController {
         end_time,
         status,
         notes,
+        batch_date,
+        had_delay,
+        delay_reason,
       } = req.body;
 
       // Validation
-      if (!product_id || !quantity_produced || !shift || !start_time || !end_time) {
+      if (
+        !product_id ||
+        !quantity_produced ||
+        !shift ||
+        !start_time ||
+        !end_time
+      ) {
         return res.status(400).json({
           success: false,
-          message: "Product, quantity, shift, start time, and end time are required",
+          message:
+            "Product, quantity, shift, start time, and end time are required",
         });
       }
 
@@ -50,31 +60,49 @@ class BatchController {
       }
 
       const unit_id = product.unit_id;
+      const queryDate = batch_date || new Date().toISOString().split("T")[0];
 
-      // Get next batch_in_shift if not provided
+      // Get next batch_in_shift for this specific product if not provided
       let finalBatchInShift = batch_in_shift;
       if (!finalBatchInShift) {
-        finalBatchInShift = await Batch.getNextBatchInShift(unit_id, shift);
+        finalBatchInShift = await Batch.getNextBatchInShift(
+          product_id,
+          shift,
+          queryDate,
+        );
       }
 
-      // Generate batch number
-      const batch_number = await Batch.generateBatchNumber(
-        unit_id,
+      // Check if time slot is already used by this product
+      const usedSlots = await Batch.getUsedTimeSlots(
+        product_id,
         shift,
-        finalBatchInShift
+        queryDate,
+      );
+      const isSlotUsed = usedSlots.some(
+        (slot) => slot.start_time === start_time && slot.end_time === end_time,
       );
 
+      if (isSlotUsed) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "This time slot is already used for this product in this shift",
+        });
+      }
+
       const batchData = {
-        batch_number,
         product_id,
         unit_id,
         quantity_produced,
         shift,
         batch_in_shift: finalBatchInShift,
+        batch_date: queryDate,
         start_time,
         end_time,
         status: status || "completed",
         notes,
+        had_delay: had_delay || "no",
+        delay_reason: delay_reason || null,
         created_by: req.user.id,
       };
 
@@ -98,7 +126,8 @@ class BatchController {
   // Get all batches
   static async getAllBatches(req, res) {
     try {
-      const { product_id, shift, status, date_from, date_to, limit } = req.query;
+      const { product_id, shift, status, date_from, date_to, limit } =
+        req.query;
       const filters = {};
 
       // If user is not admin, filter by their unit
@@ -370,7 +399,7 @@ class BatchController {
       const statistics = await Batch.getUnitStatistics(
         unitId,
         date_from,
-        date_to
+        date_to,
       );
 
       res.json({
@@ -411,7 +440,7 @@ class BatchController {
       const statistics = await Batch.getShiftStatistics(
         unitId,
         date_from,
-        date_to
+        date_to,
       );
 
       res.json({
@@ -428,26 +457,35 @@ class BatchController {
     }
   }
 
-  // Get next batch in shift (helper endpoint)
+  // Get next batch in shift (helper endpoint) - now per product
   static async getNextBatchInShift(req, res) {
     try {
-      const { unitId, shift } = req.params;
+      const { productId, shift } = req.params;
       const { date } = req.query;
 
-      // Check if user has access to this unit
-      if (req.user.role !== "admin" && parseInt(unitId) !== req.user.unit_id) {
-        return res.status(403).json({
+      // Verify product exists and user has access
+      const product = await Product.findById(productId);
+      if (!product) {
+        return res.status(404).json({
           success: false,
-          message: "Access denied to this unit",
+          message: "Product not found",
         });
       }
 
-      const nextBatch = await Batch.getNextBatchInShift(unitId, shift, date);
+      // Check if user has access to this product
+      if (req.user.role !== "admin" && product.unit_id !== req.user.unit_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this product",
+        });
+      }
+
+      const nextBatch = await Batch.getNextBatchInShift(productId, shift, date);
 
       res.json({
         success: true,
         data: {
-          unit_id: parseInt(unitId),
+          product_id: parseInt(productId),
           shift,
           date: date || new Date().toISOString().split("T")[0],
           next_batch_in_shift: nextBatch,
@@ -477,6 +515,45 @@ class BatchController {
       res.status(500).json({
         success: false,
         message: "Error fetching shift types",
+        error: error.message,
+      });
+    }
+  }
+
+  // Get used time slots for a specific product
+  static async getUsedTimeSlots(req, res) {
+    try {
+      const { productId, shift } = req.params;
+      const { date } = req.query;
+
+      // Verify product exists and user has access
+      const product = await Product.findById(productId);
+      if (!product) {
+        return res.status(404).json({
+          success: false,
+          message: "Product not found",
+        });
+      }
+
+      // Check if user has access to this product
+      if (req.user.role !== "admin" && product.unit_id !== req.user.unit_id) {
+        return res.status(403).json({
+          success: false,
+          message: "Access denied to this product",
+        });
+      }
+
+      const usedSlots = await Batch.getUsedTimeSlots(productId, shift, date);
+
+      res.json({
+        success: true,
+        data: usedSlots,
+      });
+    } catch (error) {
+      console.error("Get used time slots error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching used time slots",
         error: error.message,
       });
     }

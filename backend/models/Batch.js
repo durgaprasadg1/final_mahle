@@ -3,48 +3,54 @@ import pool from "../config/database.js";
 class Batch {
   static async create(batchData) {
     const {
-      batch_number,
       product_id,
       unit_id,
       quantity_produced,
       shift,
       batch_in_shift,
+      batch_date,
       start_time,
       end_time,
       status,
       notes,
+      had_delay,
+      delay_reason,
       created_by,
     } = batchData;
 
     const query = `
       INSERT INTO batches (
-        batch_number, 
         product_id, 
         unit_id, 
         quantity_produced, 
         shift, 
         batch_in_shift, 
+        batch_date,
         start_time, 
         end_time, 
         status, 
-        notes, 
+        notes,
+        had_delay,
+        delay_reason,
         created_by
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `;
 
     const values = [
-      batch_number,
       product_id,
       unit_id,
       quantity_produced,
       shift,
       batch_in_shift,
+      batch_date || new Date().toISOString().split("T")[0],
       start_time,
       end_time,
       status || "completed",
       notes,
+      had_delay || "no",
+      delay_reason || null,
       created_by,
     ];
 
@@ -260,39 +266,37 @@ class Batch {
     return result.rows;
   }
 
-  // Get next batch number for a shift on a specific date
-  static async getNextBatchInShift(unitId, shift, date = null) {
+  // Get next batch number for a specific product in a shift on a specific date
+  static async getNextBatchInShift(productId, shift, date = null) {
     const queryDate = date || new Date().toISOString().split("T")[0];
 
     const query = `
       SELECT COALESCE(MAX(batch_in_shift), 0) + 1 as next_batch
       FROM batches
-      WHERE unit_id = $1
+      WHERE product_id = $1
         AND shift = $2
-        AND DATE(created_at) = $3
+        AND batch_date = $3
     `;
 
-    const result = await pool.query(query, [unitId, shift, queryDate]);
+    const result = await pool.query(query, [productId, shift, queryDate]);
     return result.rows[0].next_batch;
   }
 
-  // Generate batch number with shift
-  // Format: UNITCODE-YYYY-MM-DD-SHIFT-###
-  // Example: U-GAMMA-2026-02-07-MORNING-001
-  static async generateBatchNumber(unitId, shift, batchInShift) {
-    const unitQuery = "SELECT code FROM units WHERE id = $1";
-    const unitResult = await pool.query(unitQuery, [unitId]);
+  // Get used time slots for a specific product on a date and shift
+  static async getUsedTimeSlots(productId, shift, date = null) {
+    const queryDate = date || new Date().toISOString().split("T")[0];
 
-    if (!unitResult.rows.length) {
-      throw new Error("Unit not found");
-    }
+    const query = `
+      SELECT start_time, end_time
+      FROM batches
+      WHERE product_id = $1
+        AND shift = $2
+        AND batch_date = $3
+      ORDER BY start_time
+    `;
 
-    const unitCode = unitResult.rows[0].code;
-    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-    const shiftUpper = shift.toUpperCase();
-    const batchNum = batchInShift.toString().padStart(3, "0");
-
-    return `${unitCode}-${today}-${shiftUpper}-${batchNum}`;
+    const result = await pool.query(query, [productId, shift, queryDate]);
+    return result.rows;
   }
 
   // Get shift types enum
