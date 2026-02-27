@@ -57,7 +57,7 @@ const UserDashboard = () => {
   const [availableShifts, setAvailableShifts] = useState([]);
   const [batchInterval, setBatchInterval] = useState("hourwise");
   const [batchTimeSlots, setBatchTimeSlots] = useState([]);
-  const [selectedBatchSlot, setSelectedBatchSlot] = useState("");
+  const [selectedBatchSlots, setSelectedBatchSlots] = useState([]);
   const [selectedShiftConfigId, setSelectedShiftConfigId] = useState("");
   const [reportType, setReportType] = useState("daily");
   const [reportDate, setReportDate] = useState(
@@ -69,6 +69,19 @@ const UserDashboard = () => {
   const [selectedPreviousBatchId, setSelectedPreviousBatchId] = useState("");
   const [filteredPreviousBatches, setFilteredPreviousBatches] = useState([]);
   const [delayDialogBatch, setDelayDialogBatch] = useState(null);
+
+  const DELAY_REASON_SUGGESTIONS = [
+    "Machine breakdown",
+    "Power failure",
+    "Material shortage",
+    "Quality issue",
+    "Manpower shortage",
+    "Maintenance activity",
+    "Setup or changeover delay",
+    "Tooling issue",
+    "Utility interruption",
+    "Safety hold",
+  ];
 
   const VALID_SHIFT_TYPES = ["morning", "afternoon", "night"];
 
@@ -275,7 +288,7 @@ const UserDashboard = () => {
       setBatchInterval(shiftConfig.timeInterval);
     }
 
-    setSelectedBatchSlot(""); // Reset time slot selection
+    setSelectedBatchSlots([]); // Reset time slot selection
   };
 
   const [productForm, setProductForm] = useState({
@@ -477,13 +490,8 @@ const UserDashboard = () => {
         toast.error("Quantity produced must be at least 1");
         return;
       }
-      if (!batchForm.start_time || !batchForm.end_time) {
-        toast.error("Start time and end time are required");
-        return;
-      }
-      // allow end < start (cross-midnight), but disallow equal times
-      if (batchForm.start_time === batchForm.end_time) {
-        toast.error("End time must be different from start time");
+      if (selectedBatchSlots.length === 0) {
+        toast.error("Please select at least one time slot");
         return;
       }
       // Validate delay reason if delay is selected
@@ -497,20 +505,53 @@ const UserDashboard = () => {
         return timeValue.length === 5 ? `${timeValue}:00` : timeValue;
       };
 
-      const payload = {
-        product_id: parseInt(batchForm.product_id, 10),
-        quantity_produced: parseInt(batchForm.quantity_produced, 10),
-        start_time: toTimeString(batchForm.start_time),
-        end_time: toTimeString(batchForm.end_time),
-        shift: batchForm.shift || "morning",
-        notes: batchForm.notes,
-        had_delay: batchForm.had_delay,
-        delay_reason:
-          batchForm.had_delay === "yes" ? batchForm.delay_reason : "",
-      };
+      const selectedSlots = batchTimeSlots.filter((slot) =>
+        selectedBatchSlots.includes(slot.value),
+      );
 
-      await batchAPI.create(payload);
-      toast.success("Batch created successfully");
+      if (selectedSlots.length === 0) {
+        toast.error("Please select valid time slots");
+        return;
+      }
+
+      const requests = selectedSlots.map((slot) => {
+        const payload = {
+          product_id: parseInt(batchForm.product_id, 10),
+          quantity_produced: parseInt(batchForm.quantity_produced, 10),
+          start_time: toTimeString(slot.startTime),
+          end_time: toTimeString(slot.endTime),
+          shift: batchForm.shift || "morning",
+          notes: batchForm.notes,
+          had_delay: batchForm.had_delay,
+          delay_reason:
+            batchForm.had_delay === "yes" ? batchForm.delay_reason : "",
+        };
+        return batchAPI.create(payload);
+      });
+
+      const results = await Promise.allSettled(requests);
+      const successCount = results.filter((r) => r.status === "fulfilled").length;
+      const failureCount = results.length - successCount;
+
+      if (failureCount === 0) {
+        toast.success(
+          successCount === 1
+            ? "Batch created successfully"
+            : `${successCount} batches created successfully`,
+        );
+      } else if (successCount > 0) {
+        toast.warning(
+          `${successCount} batches created, ${failureCount} failed (some slots may already be used)`,
+        );
+      } else {
+        const firstError = results.find((r) => r.status === "rejected");
+        toast.error(
+          firstError?.reason?.response?.data?.message ||
+            "Failed to create selected batches",
+        );
+        return;
+      }
+
       setShowBatchModal(false);
       setBatchForm({
         product_id: "",
@@ -522,7 +563,7 @@ const UserDashboard = () => {
         had_delay: "no",
         delay_reason: "",
       });
-      setSelectedBatchSlot("");
+      setSelectedBatchSlots([]);
       setBatchTimeSlots([]);
       setBatchInterval("hourwise");
       fetchBatches();
@@ -574,7 +615,7 @@ const UserDashboard = () => {
           slot.startTime === batch.start_time &&
           slot.endTime === batch.end_time,
       );
-      setSelectedBatchSlot(matchedSlot?.value || "");
+      setSelectedBatchSlots(matchedSlot?.value ? [matchedSlot.value] : []);
     }
 
     setShowBatchModal(true);
@@ -722,7 +763,7 @@ const UserDashboard = () => {
     setSelectedShiftConfigId(config?.id ? String(config.id) : "");
     setBatchInterval(nextInterval);
     setBatchTimeSlots(nextSlots);
-    setSelectedBatchSlot("");
+    setSelectedBatchSlots([]);
 
     if (config?.startTime && config?.endTime) {
       setBatchForm((prev) => ({
@@ -1444,7 +1485,7 @@ const UserDashboard = () => {
                         });
                         setSelectedPreviousBatchId("");
                         setFilteredPreviousBatches([]);
-                        setSelectedBatchSlot("");
+                        setSelectedBatchSlots([]);
                         setBatchTimeSlots([]);
                       }
                     }}
@@ -1616,21 +1657,35 @@ const UserDashboard = () => {
                       <label
                         key={slot.value}
                         className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${
-                          selectedBatchSlot === slot.value
+                          selectedBatchSlots.includes(slot.value)
                             ? "border-primary bg-primary/10"
                             : "border-gray-200 hover:border-gray-300"
                         }`}
                       >
                         <input
                           type="checkbox"
-                          checked={selectedBatchSlot === slot.value}
-                          onChange={() => {
-                            setSelectedBatchSlot(slot.value);
-                            setBatchForm((prev) => ({
-                              ...prev,
-                              start_time: slot.startTime,
-                              end_time: slot.endTime,
-                            }));
+                          checked={selectedBatchSlots.includes(slot.value)}
+                          onChange={(e) => {
+                            const isChecked = e.target.checked;
+                            setSelectedBatchSlots((prev) => {
+                              if (isChecked) {
+                                return [...prev, slot.value];
+                              }
+                              return prev.filter((value) => value !== slot.value);
+                            });
+                            setBatchForm((prev) => {
+                              const nextStart = isChecked
+                                ? slot.startTime
+                                : prev.start_time;
+                              const nextEnd = isChecked
+                                ? slot.endTime
+                                : prev.end_time;
+                              return {
+                                ...prev,
+                                start_time: nextStart,
+                                end_time: nextEnd,
+                              };
+                            });
                           }}
                           className="w-4 h-4 cursor-pointer"
                         />
@@ -1702,11 +1757,12 @@ const UserDashboard = () => {
                 <div className="space-y-2 animate-in fade-in">
                   <Label htmlFor="delayReason">Reason for Delay *</Label>
                   <p className="text-xs text-gray-500">
-                    Describe the cause of the production delay
+                    Select from suggested reasons or type your own
                   </p>
-                  <Textarea
+                  <Input
                     id="delayReason"
-                    placeholder="Exa : Equipment malfunction, Power outage, etc."
+                    list="delayReasonSuggestions"
+                    placeholder="Select or type delay reason"
                     value={batchForm.delay_reason}
                     onChange={(e) =>
                       setBatchForm({
@@ -1714,9 +1770,13 @@ const UserDashboard = () => {
                         delay_reason: e.target.value,
                       })
                     }
-                    rows={3}
                     required={batchForm.had_delay === "yes"}
                   />
+                  <datalist id="delayReasonSuggestions">
+                    {DELAY_REASON_SUGGESTIONS.map((reason) => (
+                      <option key={reason} value={reason} />
+                    ))}
+                  </datalist>
                 </div>
               )}
               <div className="flex justify-end space-x-2 pt-4">

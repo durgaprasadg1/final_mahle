@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
-import { useAuth } from "../../contexts/AuthContext";
 import { userAPI, unitAPI } from "../../lib/api";
 import ShiftDashboard from "./ShiftDashboard";
+import Navbar from "../../components/Navbar";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -34,17 +34,14 @@ import {
   Users,
   UserPlus,
   Shield,
-  LogOut,
   UserCheck,
   UserX,
-  Edit,
   Trash2,
   Eye,
 } from "lucide-react";
 import { formatDate, formatDateOnly } from "../../lib/utils";
 
 const AdminDashboard = () => {
-  const { user, logout } = useAuth();
   const [users, setUsers] = useState([]);
   const [units, setUnits] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -52,6 +49,7 @@ const AdminDashboard = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentView, setCurrentView] = useState("admin");
+  const [activeAdminTab, setActiveAdminTab] = useState("dashboard");
 
   const [formData, setFormData] = useState({
     name: "",
@@ -153,197 +151,174 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    toast.info("Logged out successfully");
-  };
-
   if (currentView === "shift") {
     return <ShiftDashboard onBack={() => setCurrentView("admin")} />;
   }
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <header className="bg-white shadow-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex justify-between items-center">
-            <div className="flex items-center space-x-4">
-              <Shield className="w-8 h-8 text-primary" />
-              <div>
-                <h1 className="text-2xl font-bold text-gray-900">
-                  Admin Dashboard
-                </h1>
-                <p className="text-sm text-gray-500">
-                  Mahle Inventory Management
-                </p>
-              </div>
-            </div>
-            <div className="flex items-center space-x-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentView("shift")}
-              >
-                ShiftMaker
-              </Button>
-              <div className="text-right">
-                <p className="text-sm font-medium text-gray-900">
-                  {user?.name}
-                </p>
-                <p className="text-xs text-gray-500">{user?.email}</p>
-              </div>
+      <Navbar
+        onDashboardClick={() => {
+          setCurrentView("admin");
+          setActiveAdminTab("dashboard");
+        }}
+        onUsersClick={() => {
+          setCurrentView("admin");
+          setActiveAdminTab("users");
+        }}
+        onShiftMakerClick={() => setCurrentView("shift")}
+        activeItem={activeAdminTab}
+      />
 
-              <Button variant="outline" size="sm" onClick={handleLogout}>
-                <LogOut className="w-4 h-4 mr-2" />
-                Logout
-              </Button>
-            </div>
-          </div>
-        </div>
-      </header>
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
+        <h1 className="text-2xl font-bold text-gray-900">
+          {activeAdminTab === "dashboard" ? "Admin Dashboard" : "User Management"}
+        </h1>
+        <p className="text-sm text-gray-500">
+          {activeAdminTab === "dashboard"
+            ? "Mahle Inventory Management"
+            : "Manage users across all manufacturing units"}
+        </p>
+      </div>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Users</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {users.filter((u) => u.role === "user").length}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Active Users
-              </CardTitle>
-              <UserCheck className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">
-                {
-                  users.filter(
-                    (u) => u.status === "active" && u.role === "user",
-                  ).length
-                }
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">
-                Manufacturing Units
-              </CardTitle>
-              <Shield className="h-4 w-4 text-primary" />
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{units.length}</div>
-            </CardContent>
-          </Card>
-        </div>
+        {activeAdminTab === "dashboard" && (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+                <Users className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {users.filter((u) => u.role === "user").length}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+                <UserCheck className="h-4 w-4 text-green-600" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">
+                  {
+                    users.filter(
+                      (u) => u.status === "active" && u.role === "user",
+                    ).length
+                  }
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">
+                  Manufacturing Units
+                </CardTitle>
+                <Shield className="h-4 w-4 text-primary" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{units.length}</div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
 
-        <Card>
-          <CardHeader>
-            <div className="flex justify-between items-center">
-              <div>
-                <CardTitle>User Management</CardTitle>
-                <CardDescription>
-                  Manage users across all manufacturing units
-                </CardDescription>
+        {activeAdminTab === "users" && (
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <div>
+                  <CardTitle>User Management</CardTitle>
+                  <CardDescription>
+                    Manage users across all manufacturing units
+                  </CardDescription>
+                </div>
+                <Button onClick={() => setShowCreateModal(true)}>
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Create User
+                </Button>
               </div>
-              <Button onClick={() => setShowCreateModal(true)}>
-                <UserPlus className="w-4 h-4 mr-2" />
-                Create User
-              </Button>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="text-center py-8">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-              </div>
-            ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users
-                    .filter((u) => u.role === "user")
-                    .map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">
-                          {user.name}
-                        </TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {user.unit_code || "N/A"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              user.status === "active"
-                                ? "success"
-                                : "destructive"
-                            }
-                          >
-                            {user.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{formatDateOnly(user.created_at)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setSelectedUser(user);
-                                setShowDetailsModal(true);
-                              }}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() =>
-                                handleToggleStatus(user.id, user.status)
+            </CardHeader>
+            <CardContent>
+              {loading ? (
+                <div className="text-center py-8">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Unit</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Created</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {users
+                      .filter((u) => u.role === "user")
+                      .map((user) => (
+                        <TableRow key={user.id}>
+                          <TableCell className="font-medium">{user.name}</TableCell>
+                          <TableCell>{user.email}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{user.unit_code || "N/A"}</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <Badge
+                              variant={
+                                user.status === "active"
+                                  ? "success"
+                                  : "destructive"
                               }
                             >
-                              {user.status === "active" ? (
-                                <UserX className="w-4 h-4 text-orange-600" />
-                              ) : (
-                                <UserCheck className="w-4 h-4 text-green-600" />
-                              )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteUser(user.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-red-600" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
-            )}
-          </CardContent>
-        </Card>
+                              {user.status}
+                            </Badge>
+                          </TableCell>
+                          <TableCell>{formatDateOnly(user.created_at)}</TableCell>
+                          <TableCell className="text-right">
+                            <div className="flex justify-end space-x-2">
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => {
+                                  setSelectedUser(user);
+                                  setShowDetailsModal(true);
+                                }}
+                              >
+                                <Eye className="w-4 h-4" />
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleToggleStatus(user.id, user.status)}
+                              >
+                                {user.status === "active" ? (
+                                  <UserX className="w-4 h-4 text-orange-600" />
+                                ) : (
+                                  <UserCheck className="w-4 h-4 text-green-600" />
+                                )}
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteUser(user.id)}
+                              >
+                                <Trash2 className="w-4 h-4 text-red-600" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </main>
 
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>

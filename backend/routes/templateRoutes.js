@@ -9,6 +9,13 @@ router.use(authenticate);
 // Get tier hierarchy (for product creation)
 router.get("/tiers/:id/hierarchy", TemplateController.getTierHierarchy);
 
+// Create complete hierarchy (fractile -> cells -> tiers) in one transaction
+router.post(
+  "/hierarchy",
+  checkPermission("create"),
+  TemplateController.createHierarchy,
+);
+
 // endpoints: /api/templates/fractiles, /api/templates/cells, /api/templates/tiers
 router.get("/:type", TemplateController.listTemplates);
 router.post(

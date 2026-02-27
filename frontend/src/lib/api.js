@@ -94,6 +94,7 @@ export const productAPI = {
 export const templateAPI = {
   list: (type, params) => api.get(`/templates/${type}`, { params }),
   create: (type, data) => api.post(`/templates/${type}`, data),
+  createHierarchy: (data) => api.post(`/templates/hierarchy`, data),
   update: (type, id, data) => api.put(`/templates/${type}/${id}`, data),
   delete: (type, id) => api.delete(`/templates/${type}/${id}`),
   // Get cells for a specific fractile

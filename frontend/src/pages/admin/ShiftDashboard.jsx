@@ -377,8 +377,8 @@ const ShiftDashboard = ({ onBack }) => {
                               onClick={() => handleToggleStatus(shift.id)}
                               className={
                                 shift.isActive
-                                  ? "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
-                                  : "text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                                  : "text-red-600 hover:text-red-700 hover:bg-red-50"
                               }
                             >
                               <IoToggle
