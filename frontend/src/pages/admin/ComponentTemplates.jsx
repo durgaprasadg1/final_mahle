@@ -19,7 +19,7 @@ import {
 } from "../../components/ui/dialog";
 import { toast } from "react-toastify";
 import { useNavigate } from "react-router-dom";
-import { FaChevronRight, FaChevronDown, FaPlus, FaTrash, FaFolder, FaCube, FaLayerGroup, FaEdit, FaExpandAlt, FaCompressAlt } from "react-icons/fa";
+import { FaChevronRight, FaChevronDown, FaPlus, FaTrash, FaFolder, FaCube, FaLayerGroup, FaEdit, FaExpandAlt, FaCompressAlt, FaSearch, FaTimes } from "react-icons/fa";
 
 const ComponentTemplates = () => {
   const navigate = useNavigate();
@@ -40,15 +40,23 @@ const ComponentTemplates = () => {
   
   // Modal state
   const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState("create"); // create, edit
+  const [modalMode, setModalMode] = useState("create"); // create (hierarchy), create-fractile, create-cell, create-tier, edit
   const [editItem, setEditItem] = useState(null);
-  const [form, setForm] = useState({ name: "", description: "" });
+  const [form, setForm] = useState({ name: "", description: "", fractile_id: "", cell_id: "" });
   
-  // Hierarchical creation state
+  // All cells for tier creation dropdown (loaded when creating tier)
+  const [allCellsForFractile, setAllCellsForFractile] = useState([]);
+  const [loadingCellsForDropdown, setLoadingCellsForDropdown] = useState(false);
+  
+  // Hierarchical creation state (for creating hierarchy together)
   const [fractileData, setFractileData] = useState({ name: "", description: "" });
   const [hierarchyCells, setHierarchyCells] = useState([]);
   const [nextCellId, setNextCellId] = useState(1);
   const [nextTierId, setNextTierId] = useState(1);
+  
+  // Search state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchType, setSearchType] = useState("all"); // all, fractile, cell, tier
 
   // Fetch fractiles on mount
   useEffect(() => {
@@ -109,6 +117,24 @@ const ComponentTemplates = () => {
     
     if (isExpanding && !tiersData[cellId]) {
       await fetchTiers(cellId);
+    }
+  };
+
+  // Fetch cells for a specific fractile (for dropdown in tier creation)
+  const fetchCellsForDropdown = async (fractileId) => {
+    if (!fractileId) {
+      setAllCellsForFractile([]);
+      return;
+    }
+    setLoadingCellsForDropdown(true);
+    try {
+      const res = await templateAPI.getCellsByFractile(fractileId);
+      setAllCellsForFractile(res.data.data);
+    } catch (e) {
+      toast.error("Failed to load cells");
+      setAllCellsForFractile([]);
+    } finally {
+      setLoadingCellsForDropdown(false);
     }
   };
 
@@ -205,10 +231,11 @@ const ComponentTemplates = () => {
   };
 
   // Modal handlers
-  const openCreateFractile = () => {
+  // Open hierarchical creation (Fractile with nested Cells and Tiers)
+  const openCreateHierarchy = () => {
     setModalMode("create");
     setEditItem(null);
-    setForm({ name: "", description: "" });
+    setForm({ name: "", description: "", fractile_id: "", cell_id: "" });
     setFractileData({ name: "", description: "" });
     setHierarchyCells([]);
     setNextCellId(1);
@@ -216,18 +243,47 @@ const ComponentTemplates = () => {
     setShowModal(true);
   };
 
+  // Independent creation handlers
+  const openCreateFractile = () => {
+    setModalMode("create-fractile");
+    setEditItem(null);
+    setForm({ name: "", description: "", fractile_id: "", cell_id: "" });
+    setShowModal(true);
+  };
+
+  const openCreateCell = () => {
+    setModalMode("create-cell");
+    setEditItem(null);
+    setForm({ name: "", description: "", fractile_id: "", cell_id: "" });
+    setShowModal(true);
+  };
+
+  const openCreateTier = () => {
+    setModalMode("create-tier");
+    setEditItem(null);
+    setForm({ name: "", description: "", fractile_id: "", cell_id: "" });
+    setAllCellsForFractile([]);
+    setShowModal(true);
+  };
+
   const openEdit = (type, item) => {
     setModalMode("edit");
     setEditItem({ type, ...item });
-    setForm({ name: item.name, description: item.description || "" });
+    setForm({ name: item.name, description: item.description || "", fractile_id: "", cell_id: "" });
     setShowModal(true);
+  };
+
+  // Handle fractile selection change for tier creation (cascading dropdown)
+  const handleFractileSelectForTier = async (fractileId) => {
+    setForm(prev => ({ ...prev, fractile_id: fractileId, cell_id: "" }));
+    await fetchCellsForDropdown(fractileId);
   };
 
   const handleSave = async (e) => {
     e.preventDefault();
     try {
       if (modalMode === "create") {
-        // Create hierarchy
+        // Create hierarchy (Fractile with nested Cells and Tiers)
         if (!fractileData.name.trim()) {
           toast.error("Fractile name is required");
           return;
@@ -262,6 +318,55 @@ const ComponentTemplates = () => {
         
         toast.success("Hierarchy created successfully");
         fetchFractiles();
+      } else if (modalMode === "create-fractile") {
+        if (!form.name.trim()) {
+          toast.error("Fractile name is required");
+          return;
+        }
+        await templateAPI.create("fractiles", {
+          name: form.name,
+          description: form.description
+        });
+        toast.success("Fractile created successfully");
+        fetchFractiles();
+      } else if (modalMode === "create-cell") {
+        if (!form.name.trim()) {
+          toast.error("Cell name is required");
+          return;
+        }
+        if (!form.fractile_id) {
+          toast.error("Please select a parent Fractile");
+          return;
+        }
+        await templateAPI.create("cells", {
+          name: form.name,
+          description: form.description,
+          fractile_id: parseInt(form.fractile_id)
+        });
+        toast.success("Cell created successfully");
+        // Refresh cells for the parent fractile if it's expanded
+        if (expandedFractiles[form.fractile_id]) {
+          fetchCells(form.fractile_id);
+        }
+      } else if (modalMode === "create-tier") {
+        if (!form.name.trim()) {
+          toast.error("Tier name is required");
+          return;
+        }
+        if (!form.cell_id) {
+          toast.error("Please select a parent Cell");
+          return;
+        }
+        await templateAPI.create("tiers", {
+          name: form.name,
+          description: form.description,
+          cell_id: parseInt(form.cell_id)
+        });
+        toast.success("Tier created successfully");
+        // Refresh tiers for the parent cell if it's expanded
+        if (expandedCells[form.cell_id]) {
+          fetchTiers(form.cell_id);
+        }
       } else {
         // Edit existing item
         const { type, id, fractile_id, cell_id } = editItem;
@@ -326,6 +431,86 @@ const ComponentTemplates = () => {
     return tiersData[cellId]?.length || 0;
   };
 
+  // Search/Filter helper functions
+  const matchesSearch = (item, query) => {
+    if (!query.trim()) return true;
+    const lowerQuery = query.toLowerCase();
+    const nameMatch = item.name?.toLowerCase().includes(lowerQuery);
+    const idMatch = item.id?.toString().includes(lowerQuery);
+    const descMatch = item.description?.toLowerCase().includes(lowerQuery);
+    return nameMatch || idMatch || descMatch;
+  };
+
+  // Filter fractiles based on search
+  const getFilteredFractiles = () => {
+    if (!searchQuery.trim()) return fractiles;
+    
+    if (searchType === "fractile" || searchType === "all") {
+      return fractiles.filter(f => matchesSearch(f, searchQuery));
+    }
+    
+    // For cell or tier search, show fractiles that have matching children
+    if (searchType === "cell") {
+      return fractiles.filter(f => {
+        const cells = cellsData[f.id] || [];
+        return cells.some(c => matchesSearch(c, searchQuery));
+      });
+    }
+    
+    if (searchType === "tier") {
+      return fractiles.filter(f => {
+        const cells = cellsData[f.id] || [];
+        return cells.some(c => {
+          const tiers = tiersData[c.id] || [];
+          return tiers.some(t => matchesSearch(t, searchQuery));
+        });
+      });
+    }
+    
+    return fractiles;
+  };
+
+  // Filter cells based on search
+  const getFilteredCells = (fractileId) => {
+    const cells = cellsData[fractileId] || [];
+    if (!searchQuery.trim()) return cells;
+    
+    if (searchType === "cell" || searchType === "all") {
+      return cells.filter(c => matchesSearch(c, searchQuery));
+    }
+    
+    if (searchType === "tier") {
+      // Show cells that have matching tiers
+      return cells.filter(c => {
+        const tiers = tiersData[c.id] || [];
+        return tiers.some(t => matchesSearch(t, searchQuery));
+      });
+    }
+    
+    return cells;
+  };
+
+  // Filter tiers based on search
+  const getFilteredTiers = (cellId) => {
+    const tiers = tiersData[cellId] || [];
+    if (!searchQuery.trim()) return tiers;
+    
+    if (searchType === "tier" || searchType === "all") {
+      return tiers.filter(t => matchesSearch(t, searchQuery));
+    }
+    
+    return tiers;
+  };
+
+  // Clear search
+  const clearSearch = () => {
+    setSearchQuery("");
+    setSearchType("all");
+  };
+
+  // Get filtered data
+  const filteredFractiles = getFilteredFractiles();
+
   return (
     <div className="p-6">
       <div className="flex items-center justify-between mb-4">
@@ -342,8 +527,8 @@ const ComponentTemplates = () => {
       {/* Header with actions */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <h3 className="text-lg font-semibold">Fractiles</h3>
-          <span className="text-sm text-gray-500">({fractiles.length} total)</span>
+          <h3 className="text-lg font-semibold">Hierarchy Management</h3>
+          <span className="text-sm text-gray-500">({fractiles.length} Fractiles)</span>
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={expandAll}>
@@ -352,10 +537,66 @@ const ComponentTemplates = () => {
           <Button variant="outline" size="sm" onClick={collapseAll}>
             <FaCompressAlt className="w-3 h-3 mr-1" /> Collapse All
           </Button>
-          <Button onClick={openCreateFractile}>
-            <FaPlus className="w-3 h-3 mr-2" /> Create Fractile
-          </Button>
         </div>
+      </div>
+
+      {/* Independent Add Buttons */}
+      <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg border">
+        <span className="text-sm font-medium text-gray-600">Add independently:</span>
+        <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={openCreateFractile}>
+          <FaFolder className="w-3 h-3 mr-1" /> Fractile
+        </Button>
+        <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={openCreateCell} disabled={fractiles.length === 0}>
+          <FaCube className="w-3 h-3 mr-1" /> Cell
+        </Button>
+        <Button size="sm" className="bg-purple-600 hover:bg-purple-700" onClick={openCreateTier} disabled={fractiles.length === 0}>
+          <FaLayerGroup className="w-3 h-3 mr-1" /> Tier
+        </Button>
+        <div className="border-l border-gray-300 h-6 mx-2"></div>
+        <Button size="sm" variant="outline" onClick={openCreateHierarchy}>
+          <FaPlus className="w-3 h-3 mr-1" /> Create Hierarchy
+        </Button>
+      </div>
+
+      {/* Search Box */}
+      <div className="flex items-center gap-3 mb-4 p-3 bg-white rounded-lg border shadow-sm">
+        <div className="flex items-center gap-2 flex-1">
+          <FaSearch className="w-4 h-4 text-gray-400" />
+          <Input
+            type="text"
+            placeholder="Search by name or ID..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="flex-1 border-0 shadow-none focus-visible:ring-0 px-0"
+          />
+          {searchQuery && (
+            <button
+              onClick={clearSearch}
+              className="p-1 hover:bg-gray-100 rounded-full"
+            >
+              <FaTimes className="w-3 h-3 text-gray-400" />
+            </button>
+          )}
+        </div>
+        <div className="border-l border-gray-300 h-6 mx-2"></div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-500">Search in:</span>
+          <select
+            className="text-sm border rounded px-2 py-1 bg-white"
+            value={searchType}
+            onChange={(e) => setSearchType(e.target.value)}
+          >
+            <option value="all">All</option>
+            <option value="fractile">Fractiles</option>
+            <option value="cell">Cells</option>
+            <option value="tier">Tiers</option>
+          </select>
+        </div>
+        {searchQuery && (
+          <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+            {filteredFractiles.length} result(s)
+          </span>
+        )}
       </div>
 
       {/* Table View */}
@@ -365,6 +606,10 @@ const ComponentTemplates = () => {
         ) : fractiles.length === 0 ? (
           <div className="text-gray-500 text-center py-8 bg-gray-50">
             No fractiles found. Click "Create Fractile" to add one.
+          </div>
+        ) : filteredFractiles.length === 0 ? (
+          <div className="text-gray-500 text-center py-8 bg-gray-50">
+            No results found for "{searchQuery}". Try a different search term.
           </div>
         ) : (
           <Table>
@@ -379,7 +624,7 @@ const ComponentTemplates = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {fractiles.map((fractile) => (
+              {filteredFractiles.map((fractile) => (
                 <React.Fragment key={fractile.id}>
                   {/* Fractile Row */}
                   <TableRow className="bg-blue-50 hover:bg-blue-100 cursor-pointer" onClick={() => toggleFractile(fractile.id)}>
@@ -430,8 +675,12 @@ const ComponentTemplates = () => {
                         <TableRow>
                           <TableCell colSpan={6} className="pl-12 text-gray-400 text-sm italic">No cells in this fractile.</TableCell>
                         </TableRow>
+                      ) : getFilteredCells(fractile.id).length === 0 ? (
+                        <TableRow>
+                          <TableCell colSpan={6} className="pl-12 text-gray-400 text-sm italic">No cells match the search.</TableCell>
+                        </TableRow>
                       ) : (
-                        cellsData[fractile.id].map((cell) => (
+                        getFilteredCells(fractile.id).map((cell) => (
                           <React.Fragment key={cell.id}>
                             {/* Cell Row */}
                             <TableRow className="bg-green-50 hover:bg-green-100 cursor-pointer" onClick={() => toggleCell(cell.id)}>
@@ -482,8 +731,12 @@ const ComponentTemplates = () => {
                                   <TableRow>
                                     <TableCell colSpan={6} className="pl-20 text-gray-400 text-sm italic">No tiers in this cell.</TableCell>
                                   </TableRow>
+                                ) : getFilteredTiers(cell.id).length === 0 ? (
+                                  <TableRow>
+                                    <TableCell colSpan={6} className="pl-20 text-gray-400 text-sm italic">No tiers match the search.</TableCell>
+                                  </TableRow>
                                 ) : (
-                                  tiersData[cell.id].map((tier) => (
+                                  getFilteredTiers(cell.id).map((tier) => (
                                     <TableRow key={tier.id} className="bg-purple-50 hover:bg-purple-100">
                                       <TableCell></TableCell>
                                       <TableCell>
@@ -527,7 +780,15 @@ const ComponentTemplates = () => {
         <DialogContent className={modalMode === "create" ? "max-w-2xl max-h-[80vh] overflow-y-auto" : ""}>
           <DialogHeader>
             <DialogTitle>
-              {modalMode === "edit" ? `Edit ${editItem?.type?.charAt(0).toUpperCase() + editItem?.type?.slice(1)}` : "Create Fractile Hierarchy"}
+              {modalMode === "edit" 
+                ? `Edit ${editItem?.type?.charAt(0).toUpperCase() + editItem?.type?.slice(1)}`
+                : modalMode === "create"
+                ? "Create Fractile Hierarchy"
+                : modalMode === "create-fractile"
+                ? "Add Fractile"
+                : modalMode === "create-cell"
+                ? "Add Cell"
+                : "Add Tier"}
             </DialogTitle>
           </DialogHeader>
           
@@ -694,6 +955,89 @@ const ComponentTemplates = () => {
             </form>
           ) : (
             <form onSubmit={handleSave} className="space-y-4 mt-4">
+              {/* Independent Fractile Creation */}
+              {modalMode === "create-fractile" && (
+                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FaFolder className="text-blue-600 w-4 h-4" />
+                    <span className="text-sm font-medium text-blue-700">Creating a new Fractile (root level)</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Independent Cell Creation - needs Fractile dropdown */}
+              {modalMode === "create-cell" && (
+                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FaCube className="text-green-600 w-4 h-4" />
+                    <span className="text-sm font-medium text-green-700">Creating a new Cell (must belong to a Fractile)</span>
+                  </div>
+                  <div>
+                    <Label>Parent Fractile *</Label>
+                    <select
+                      className="w-full px-3 py-2 border rounded-md text-sm bg-white"
+                      value={form.fractile_id}
+                      onChange={(e) => setForm({ ...form, fractile_id: e.target.value })}
+                      required
+                    >
+                      <option value="">Select a Fractile...</option>
+                      {fractiles.map((f) => (
+                        <option key={f.id} value={f.id}>{f.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              {/* Independent Tier Creation - needs Fractile + Cell cascading dropdowns */}
+              {modalMode === "create-tier" && (
+                <div className="p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                  <div className="flex items-center gap-2 mb-3">
+                    <FaLayerGroup className="text-purple-600 w-4 h-4" />
+                    <span className="text-sm font-medium text-purple-700">Creating a new Tier (must belong to a Cell)</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label>Select Fractile *</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md text-sm bg-white"
+                        value={form.fractile_id}
+                        onChange={(e) => handleFractileSelectForTier(e.target.value)}
+                        required
+                      >
+                        <option value="">Select a Fractile...</option>
+                        {fractiles.map((f) => (
+                          <option key={f.id} value={f.id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <Label>Parent Cell *</Label>
+                      <select
+                        className="w-full px-3 py-2 border rounded-md text-sm bg-white"
+                        value={form.cell_id}
+                        onChange={(e) => setForm({ ...form, cell_id: e.target.value })}
+                        disabled={!form.fractile_id || loadingCellsForDropdown}
+                        required
+                      >
+                        <option value="">
+                          {loadingCellsForDropdown 
+                            ? "Loading cells..." 
+                            : !form.fractile_id 
+                            ? "Select a Fractile first" 
+                            : allCellsForFractile.length === 0 
+                            ? "No cells in this Fractile" 
+                            : "Select a Cell..."}
+                        </option>
+                        {allCellsForFractile.map((c) => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div>
                 <Label>Name *</Label>
                 <Input
@@ -715,7 +1059,9 @@ const ComponentTemplates = () => {
                 <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
                   Cancel
                 </Button>
-                <Button type="submit">Save</Button>
+                <Button type="submit">
+                  {modalMode === "edit" ? "Save" : "Create"}
+                </Button>
               </div>
             </form>
           )}

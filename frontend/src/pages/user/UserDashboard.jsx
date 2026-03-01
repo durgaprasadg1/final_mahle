@@ -210,6 +210,17 @@ const UserDashboard = () => {
   // All tiers loaded with their hierarchy info
   const [allTiers, setAllTiers] = useState([]);
 
+  // All fractiles and cells for filter dropdowns
+  const [allFractiles, setAllFractiles] = useState([]);
+  const [allCells, setAllCells] = useState([]);
+
+  // Product filters
+  const [productFilters, setProductFilters] = useState({
+    fractile_id: "",
+    cell_id: "",
+    tier_id: "",
+  });
+
   // Fetch all tiers with hierarchy info
   const fetchAllTiers = async () => {
     try {
@@ -219,6 +230,28 @@ const UserDashboard = () => {
       setAllTiers(res.data.data);
     } catch (e) {
       console.error("Failed to fetch tiers");
+    }
+  };
+
+  // Fetch all fractiles for filter dropdown
+  const fetchAllFractiles = async () => {
+    try {
+      const api = await import("../../lib/api");
+      const res = await api.templateAPI.list("fractiles");
+      setAllFractiles(res.data.data);
+    } catch (e) {
+      console.error("Failed to fetch fractiles");
+    }
+  };
+
+  // Fetch all cells for filter dropdown
+  const fetchAllCells = async () => {
+    try {
+      const api = await import("../../lib/api");
+      const res = await api.templateAPI.list("cells");
+      setAllCells(res.data.data);
+    } catch (e) {
+      console.error("Failed to fetch cells");
     }
   };
 
@@ -242,7 +275,99 @@ const UserDashboard = () => {
 
   useEffect(() => {
     fetchAllTiers();
+    fetchAllFractiles();
+    fetchAllCells();
   }, []);
+
+  // Filter products based on selected filters
+  const getFilteredProducts = () => {
+    return products.filter((product) => {
+      const fractiles = Array.isArray(product.fractiles) ? product.fractiles : [];
+      const cells = Array.isArray(product.cells) ? product.cells : [];
+      const tiers = Array.isArray(product.tiers) ? product.tiers : [];
+
+      // Check fractile filter
+      if (productFilters.fractile_id) {
+        const hasFractile = fractiles.some(
+          (f) => String(f.id) === String(productFilters.fractile_id)
+        );
+        if (!hasFractile) return false;
+      }
+
+      // Check cell filter
+      if (productFilters.cell_id) {
+        const hasCell = cells.some(
+          (c) => String(c.id) === String(productFilters.cell_id)
+        );
+        if (!hasCell) return false;
+      }
+
+      // Check tier filter
+      if (productFilters.tier_id) {
+        const hasTier = tiers.some(
+          (t) => String(t.id) === String(productFilters.tier_id)
+        );
+        if (!hasTier) return false;
+      }
+
+      return true;
+    });
+  };
+
+  // Get cells filtered by selected fractile (for cascading filter)
+  const getFilteredCellsForFilter = () => {
+    if (!productFilters.fractile_id) return allCells;
+    return allCells.filter(
+      (c) => String(c.fractile_id) === String(productFilters.fractile_id)
+    );
+  };
+
+  // Get tiers filtered by selected cell (for cascading filter)
+  const getFilteredTiersForFilter = () => {
+    if (!productFilters.cell_id) {
+      if (!productFilters.fractile_id) return allTiers;
+      // Filter tiers by fractile if only fractile is selected
+      return allTiers.filter(
+        (t) => String(t.fractile_id) === String(productFilters.fractile_id)
+      );
+    }
+    return allTiers.filter(
+      (t) => String(t.cell_id) === String(productFilters.cell_id)
+    );
+  };
+
+  // Handle fractile filter change (cascade clear cell and tier)
+  const handleFractileFilterChange = (value) => {
+    setProductFilters({
+      fractile_id: value,
+      cell_id: "",
+      tier_id: "",
+    });
+  };
+
+  // Handle cell filter change (cascade clear tier)
+  const handleCellFilterChange = (value) => {
+    setProductFilters((prev) => ({
+      ...prev,
+      cell_id: value,
+      tier_id: "",
+    }));
+  };
+
+  // Clear all filters
+  const clearProductFilters = () => {
+    setProductFilters({
+      fractile_id: "",
+      cell_id: "",
+      tier_id: "",
+    });
+  };
+
+  // Check if any filter is active
+  const hasActiveFilters = productFilters.fractile_id || productFilters.cell_id || productFilters.tier_id;
+
+  // Filtered products
+  const filteredProducts = getFilteredProducts();
 
   const [batchForm, setBatchForm] = useState({
     product_id: "",
@@ -868,9 +993,84 @@ const UserDashboard = () => {
               </div>
             </CardHeader>
             <CardContent>
+              {/* Product Filters */}
+              <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg border">
+                <span className="text-sm font-medium text-gray-600">Filter by:</span>
+                
+                {/* Fractile Filter */}
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-gray-500">Fractile:</label>
+                  <select
+                    className="text-sm border rounded px-2 py-1 bg-white min-w-[120px]"
+                    value={productFilters.fractile_id}
+                    onChange={(e) => handleFractileFilterChange(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {allFractiles.map((f) => (
+                      <option key={f.id} value={f.id}>{f.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Cell Filter */}
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-gray-500">Cell:</label>
+                  <select
+                    className="text-sm border rounded px-2 py-1 bg-white min-w-[120px]"
+                    value={productFilters.cell_id}
+                    onChange={(e) => handleCellFilterChange(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {getFilteredCellsForFilter().map((c) => (
+                      <option key={c.id} value={c.id}>{c.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tier Filter */}
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-gray-500">Tier:</label>
+                  <select
+                    className="text-sm border rounded px-2 py-1 bg-white min-w-[120px]"
+                    value={productFilters.tier_id}
+                    onChange={(e) => setProductFilters(prev => ({ ...prev, tier_id: e.target.value }))}
+                  >
+                    <option value="">All</option>
+                    {getFilteredTiersForFilter().map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Clear Filters */}
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearProductFilters}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    Clear Filters
+                  </Button>
+                )}
+
+                {/* Results count */}
+                {hasActiveFilters && (
+                  <span className="text-xs text-gray-500 ml-auto">
+                    Showing {filteredProducts.length} of {products.length} products
+                  </span>
+                )}
+              </div>
+
               {loading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  {hasActiveFilters 
+                    ? "No products match the selected filters."
+                    : "No products found. Add a product to get started."}
                 </div>
               ) : (
                 <Table>
@@ -884,7 +1084,7 @@ const UserDashboard = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {products.map((product) => {
+                    {filteredProducts.map((product) => {
                       const fractiles = Array.isArray(product.fractiles)
                         ? product.fractiles
                         : [];
