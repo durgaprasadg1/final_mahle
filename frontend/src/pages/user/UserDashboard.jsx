@@ -63,6 +63,12 @@ const UserDashboard = () => {
   const [reportDate, setReportDate] = useState(
     new Date().toISOString().split("T")[0],
   );
+  const [reportDateFrom, setReportDateFrom] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [reportDateTo, setReportDateTo] = useState(
+    new Date().toISOString().split("T")[0],
+  );
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportResults, setReportResults] = useState([]);
   const [usePreviousBatch, setUsePreviousBatch] = useState(false);
@@ -102,6 +108,16 @@ const UserDashboard = () => {
         );
         dateFrom = firstDay.toISOString().split("T")[0];
         dateTo = lastDay.toISOString().split("T")[0];
+      } else if (reportType === "range") {
+        dateFrom = reportDateFrom;
+        dateTo = reportDateTo;
+
+        // Validate date range
+        if (new Date(dateFrom) > new Date(dateTo)) {
+          toast.error("From date cannot be later than To date");
+          setIsGeneratingReport(false);
+          return;
+        }
       }
 
       const response = await batchAPI.getAll({
@@ -363,14 +379,16 @@ const UserDashboard = () => {
   // Filter products based on selected filters
   const getFilteredProducts = () => {
     return products.filter((product) => {
-      const fractiles = Array.isArray(product.fractiles) ? product.fractiles : [];
+      const fractiles = Array.isArray(product.fractiles)
+        ? product.fractiles
+        : [];
       const cells = Array.isArray(product.cells) ? product.cells : [];
       const tiers = Array.isArray(product.tiers) ? product.tiers : [];
 
       // Check fractile filter
       if (productFilters.fractile_id) {
         const hasFractile = fractiles.some(
-          (f) => String(f.id) === String(productFilters.fractile_id)
+          (f) => String(f.id) === String(productFilters.fractile_id),
         );
         if (!hasFractile) return false;
       }
@@ -378,7 +396,7 @@ const UserDashboard = () => {
       // Check cell filter
       if (productFilters.cell_id) {
         const hasCell = cells.some(
-          (c) => String(c.id) === String(productFilters.cell_id)
+          (c) => String(c.id) === String(productFilters.cell_id),
         );
         if (!hasCell) return false;
       }
@@ -386,7 +404,7 @@ const UserDashboard = () => {
       // Check tier filter
       if (productFilters.tier_id) {
         const hasTier = tiers.some(
-          (t) => String(t.id) === String(productFilters.tier_id)
+          (t) => String(t.id) === String(productFilters.tier_id),
         );
         if (!hasTier) return false;
       }
@@ -399,7 +417,7 @@ const UserDashboard = () => {
   const getFilteredCellsForFilter = () => {
     if (!productFilters.fractile_id) return allCells;
     return allCells.filter(
-      (c) => String(c.fractile_id) === String(productFilters.fractile_id)
+      (c) => String(c.fractile_id) === String(productFilters.fractile_id),
     );
   };
 
@@ -409,11 +427,11 @@ const UserDashboard = () => {
       if (!productFilters.fractile_id) return allTiers;
       // Filter tiers by fractile if only fractile is selected
       return allTiers.filter(
-        (t) => String(t.fractile_id) === String(productFilters.fractile_id)
+        (t) => String(t.fractile_id) === String(productFilters.fractile_id),
       );
     }
     return allTiers.filter(
-      (t) => String(t.cell_id) === String(productFilters.cell_id)
+      (t) => String(t.cell_id) === String(productFilters.cell_id),
     );
   };
 
@@ -445,7 +463,10 @@ const UserDashboard = () => {
   };
 
   // Check if any filter is active
-  const hasActiveFilters = productFilters.fractile_id || productFilters.cell_id || productFilters.tier_id;
+  const hasActiveFilters =
+    productFilters.fractile_id ||
+    productFilters.cell_id ||
+    productFilters.tier_id;
 
   // Filtered products
   const filteredProducts = getFilteredProducts();
@@ -1096,8 +1117,10 @@ const UserDashboard = () => {
             <CardContent>
               {/* Product Filters */}
               <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg border">
-                <span className="text-sm font-medium text-gray-600">Filter by:</span>
-                
+                <span className="text-sm font-medium text-gray-600">
+                  Filter by:
+                </span>
+
                 {/* Fractile Filter */}
                 <div className="flex items-center gap-1">
                   <label className="text-xs text-gray-500">Fractile:</label>
@@ -1108,7 +1131,9 @@ const UserDashboard = () => {
                   >
                     <option value="">All</option>
                     {allFractiles.map((f) => (
-                      <option key={f.id} value={f.id}>{f.name}</option>
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1123,7 +1148,9 @@ const UserDashboard = () => {
                   >
                     <option value="">All</option>
                     {getFilteredCellsForFilter().map((c) => (
-                      <option key={c.id} value={c.id}>{c.name}</option>
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1134,11 +1161,18 @@ const UserDashboard = () => {
                   <select
                     className="text-sm border rounded px-2 py-1 bg-white min-w-[120px]"
                     value={productFilters.tier_id}
-                    onChange={(e) => setProductFilters(prev => ({ ...prev, tier_id: e.target.value }))}
+                    onChange={(e) =>
+                      setProductFilters((prev) => ({
+                        ...prev,
+                        tier_id: e.target.value,
+                      }))
+                    }
                   >
                     <option value="">All</option>
                     {getFilteredTiersForFilter().map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -1158,7 +1192,8 @@ const UserDashboard = () => {
                 {/* Results count */}
                 {hasActiveFilters && (
                   <span className="text-xs text-gray-500 ml-auto">
-                    Showing {filteredProducts.length} of {products.length} products
+                    Showing {filteredProducts.length} of {products.length}{" "}
+                    products
                   </span>
                 )}
               </div>
@@ -1169,7 +1204,7 @@ const UserDashboard = () => {
                 </div>
               ) : filteredProducts.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
-                  {hasActiveFilters 
+                  {hasActiveFilters
                     ? "No products match the selected filters."
                     : "No products found. Add a product to get started."}
                 </div>
@@ -1656,7 +1691,7 @@ const UserDashboard = () => {
                     className="w-5 h-5 cursor-pointer"
                   />
                   <span className="font-semibold text-sm text-blue-900">
-                   Same as Previous Batch
+                    Same as Previous Batch
                     {batchForm.product_id &&
                       getPreviousBatchesForProduct(batchForm.product_id)
                         .length === 0 && (
@@ -1947,29 +1982,53 @@ const UserDashboard = () => {
             <DialogTitle>Production Reports</DialogTitle>
           </DialogHeader>
           <div className="space-y-6 mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-              <div className="space-y-2">
-                <Label>Report Type</Label>
-                <Select
-                  value={reportType}
-                  onChange={(e) => setReportType(e.target.value)}
-                >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </Select>
+            <div className="grid grid-cols-1 gap-4 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Report Type</Label>
+                  <Select
+                    value={reportType}
+                    onChange={(e) => setReportType(e.target.value)}
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="range">Custom Range</option>
+                  </Select>
+                </div>
+                {reportType !== "range" ? (
+                  <div className="space-y-2">
+                    <Label>
+                      Select {reportType === "monthly" ? "Month" : "Date"}
+                    </Label>
+                    <Input
+                      type={reportType === "monthly" ? "month" : "date"}
+                      value={reportDate}
+                      onChange={(e) => setReportDate(e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label>From Date</Label>
+                      <Input
+                        type="date"
+                        value={reportDateFrom}
+                        onChange={(e) => setReportDateFrom(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>To Date</Label>
+                      <Input
+                        type="date"
+                        value={reportDateTo}
+                        onChange={(e) => setReportDateTo(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label>
-                  Select {reportType === "monthly" ? "Month" : "Date"}
-                </Label>
-                <Input
-                  type={reportType === "monthly" ? "month" : "date"}
-                  value={reportDate}
-                  onChange={(e) => setReportDate(e.target.value)}
-                />
-              </div>
-              <div className="flex items-end space-x-2">
+              <div className="flex items-start space-x-2">
                 <Button
                   className="flex-1"
                   onClick={handleGenerateReport}

@@ -562,7 +562,7 @@ const ComponentTemplates = () => {
       {/* Independent Add Buttons */}
       <div className="flex items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg border">
         <span className="text-sm font-medium text-gray-600">Add independently:</span>
-        <Button size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={openCreateFractile}>
+        <Button  size="sm" className="bg-blue-600 hover:bg-blue-700" onClick={openCreateFractile}>
           <FaFolder className="w-3 h-3 mr-1" /> Fractile
         </Button>
         <Button size="sm" className="bg-green-600 hover:bg-green-700" onClick={openCreateCell} disabled={fractiles.length === 0}>
@@ -965,7 +965,6 @@ const ComponentTemplates = () => {
                 </div>
               </div>
 
-              {/* Cells Container */}
               <div className="ml-6 border-l-2 border-gray-300 pl-4">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-gray-600">
