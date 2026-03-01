@@ -9,6 +9,7 @@ import unitRoutes from "./routes/unitRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
 import templateRoutes from "./routes/templateRoutes.js";
+import tierRoutes from "./routes/tierRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -31,6 +32,7 @@ app.use("/api/units", unitRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/batches", batchRoutes);
 app.use("/api/templates", templateRoutes);
+app.use("/api/tiers", tierRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

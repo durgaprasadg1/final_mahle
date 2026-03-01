@@ -5,7 +5,9 @@ DROP FUNCTION IF EXISTS get_daily_production_summary(INTEGER, DATE) CASCADE;
 DROP FUNCTION IF EXISTS get_batches_by_shift(INTEGER, shift_type, DATE) CASCADE;
 DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
 
-
+DROP TABLE IF EXISTS tier_templates CASCADE;
+DROP TABLE IF EXISTS cell_templates CASCADE;
+DROP TABLE IF EXISTS fractile_templates CASCADE;
 DROP TABLE IF EXISTS batches CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS product_fractiles CASCADE;
@@ -69,6 +71,7 @@ CREATE TABLE products (
 CREATE TABLE product_fractiles (
     id SERIAL PRIMARY KEY,
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    cell_id INTEGER,
     name VARCHAR(100) NOT NULL,
     count INTEGER DEFAULT 0,
     description TEXT,
@@ -80,6 +83,7 @@ CREATE TABLE product_fractiles (
 CREATE TABLE product_cells (
     id SERIAL PRIMARY KEY,
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    tier_id INTEGER,
     name VARCHAR(100) NOT NULL,
     count INTEGER DEFAULT 0,
     description TEXT,
@@ -97,7 +101,15 @@ CREATE TABLE product_tiers (
     CONSTRAINT unique_product_tier UNIQUE(product_id, name)
 );
 
--- Templates for reusable components (global)
+ALTER TABLE product_cells
+ADD CONSTRAINT fk_product_cells_tier
+FOREIGN KEY (tier_id) REFERENCES product_tiers(id) ON DELETE CASCADE;
+
+ALTER TABLE product_fractiles
+ADD CONSTRAINT fk_product_fractiles_cell
+FOREIGN KEY (cell_id) REFERENCES product_cells(id) ON DELETE CASCADE;
+
+-- Templates for reusable components (global) with hierarchy: Fractile → Cell → Tier
 CREATE TABLE fractile_templates (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
@@ -109,21 +121,28 @@ CREATE TABLE fractile_templates (
 
 CREATE TABLE cell_templates (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
+    fractile_id INTEGER NOT NULL REFERENCES fractile_templates(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
     description TEXT,
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_cell_per_fractile UNIQUE(fractile_id, name)
 );
 
 CREATE TABLE tier_templates (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
+    cell_id INTEGER NOT NULL REFERENCES cell_templates(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
     description TEXT,
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_tier_per_cell UNIQUE(cell_id, name)
 );
+
+CREATE INDEX idx_cell_templates_fractile ON cell_templates(fractile_id);
+CREATE INDEX idx_tier_templates_cell ON tier_templates(cell_id);
 
 CREATE TABLE batches (
     id SERIAL PRIMARY KEY,
@@ -153,8 +172,12 @@ CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_products_unit ON products(unit_id);
 CREATE INDEX idx_products_type ON products(type);
 CREATE INDEX idx_product_fractiles_product ON product_fractiles(product_id);
+CREATE INDEX idx_product_fractiles_cell ON product_fractiles(cell_id);
 CREATE INDEX idx_product_cells_product ON product_cells(product_id);
+CREATE INDEX idx_product_cells_tier ON product_cells(tier_id);
 CREATE INDEX idx_product_tiers_product ON product_tiers(product_id);
+CREATE UNIQUE INDEX ux_product_cells_tier_unique ON product_cells(tier_id) WHERE tier_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_product_fractiles_cell_unique ON product_fractiles(cell_id) WHERE cell_id IS NOT NULL;
 CREATE INDEX idx_batches_product ON batches(product_id);
 CREATE INDEX idx_batches_unit ON batches(unit_id);
 CREATE INDEX idx_batches_batch_number ON batches(batch_number);

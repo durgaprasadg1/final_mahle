@@ -4,8 +4,15 @@ class TemplateController {
   static async listTemplates(req, res) {
     try {
       const { type } = req.params; // fractiles, cells, tiers
+      const { fractile_id, cell_id } = req.query;
       const t = type.replace(/s$/i, "");
-      const rows = await ComponentTemplate.list(t);
+      
+      // Determine parentId based on type
+      let parentId = null;
+      if (t === "cell" && fractile_id) parentId = parseInt(fractile_id);
+      if (t === "tier" && cell_id) parentId = parseInt(cell_id);
+      
+      const rows = await ComponentTemplate.list(t, parentId);
       res.json({ success: true, count: rows.length, data: rows });
     } catch (error) {
       console.error("List templates error:", error);
@@ -23,7 +30,7 @@ class TemplateController {
     try {
       const { type } = req.params; // fractiles, cells, tiers
       const t = type.replace(/s$/i, "");
-      const { name, description } = req.body;
+      const { name, description, fractile_id, cell_id } = req.body;
       if (!name)
         return res
           .status(400)
@@ -33,6 +40,8 @@ class TemplateController {
         name,
         description,
         created_by: req.user?.id || null,
+        fractile_id,
+        cell_id,
       });
       res.status(201).json({ success: true, data: created });
     } catch (error) {
@@ -84,6 +93,28 @@ class TemplateController {
           message: "Error deleting template",
           error: error.message,
         });
+    }
+  }
+
+  // Get full hierarchy for a tier
+  static async getTierHierarchy(req, res) {
+    try {
+      const { id } = req.params;
+      const hierarchy = await ComponentTemplate.getTierHierarchy(id);
+      if (!hierarchy) {
+        return res.status(404).json({
+          success: false,
+          message: "Tier not found",
+        });
+      }
+      res.json({ success: true, data: hierarchy });
+    } catch (error) {
+      console.error("Get tier hierarchy error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error fetching tier hierarchy",
+        error: error.message,
+      });
     }
   }
 }

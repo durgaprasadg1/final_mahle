@@ -7,10 +7,10 @@ export function cn(...inputs) {
 
 export function formatDate(date) {
   if (!date) return "";
-  return new Date(date).toLocaleString("en-GB", {
-    year: "numeric",
-    month: "short",
+  return new Date(date).toLocaleString("en-IN", {
     day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
     hour: "2-digit",
     minute: "2-digit",
   });
@@ -18,10 +18,10 @@ export function formatDate(date) {
 
 export function formatDateOnly(date) {
   if (!date) return "";
-  return new Date(date).toLocaleDateString("en-GB", {
-    year: "numeric",
-    month: "short",
+  return new Date(date).toLocaleDateString("en-IN", {
     day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
   });
 }
 

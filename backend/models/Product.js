@@ -11,6 +11,15 @@ class Product {
       description,
       specifications,
       created_by,
+      tier_id,
+      // Hierarchy info from templates (passed from controller)
+      tierName,
+      tierDescription,
+      cellName,
+      cellDescription,
+      fractileName,
+      fractileDescription,
+      // Legacy array-based approach
       fractiles,
       cells,
       tiers,
@@ -43,34 +52,62 @@ class Product {
       const productResult = await client.query(productQuery, productValues);
       const product = productResult.rows[0];
 
-      // Insert components if provided
-      if (fractiles && fractiles.length > 0) {
-        for (const fractile of fractiles) {
-          await client.query(
-            `INSERT INTO product_fractiles (product_id, name, count, description)
-             VALUES ($1, $2, $3, $4)`,
-            [product.id, fractile.name, fractile.count || 0, fractile.description]
-          );
-        }
-      }
+      // If tier_id and hierarchy info is provided (from templates)
+      if (tier_id && tierName) {
+        // Insert tier
+        const insertedTierResult = await client.query(
+          `INSERT INTO product_tiers (product_id, name, count, description)
+           VALUES ($1, $2, $3, $4)
+           RETURNING *`,
+          [product.id, tierName, 0, tierDescription]
+        );
+        const insertedTier = insertedTierResult.rows[0];
 
-      if (cells && cells.length > 0) {
-        for (const cell of cells) {
-          await client.query(
-            `INSERT INTO product_cells (product_id, name, count, description)
-             VALUES ($1, $2, $3, $4)`,
-            [product.id, cell.name, cell.count || 0, cell.description]
-          );
-        }
-      }
+        // Insert cell linked to tier
+        const insertedCellResult = await client.query(
+          `INSERT INTO product_cells (product_id, tier_id, name, count, description)
+           VALUES ($1, $2, $3, $4, $5)
+           RETURNING *`,
+          [product.id, insertedTier.id, cellName, 0, cellDescription]
+        );
+        const insertedCell = insertedCellResult.rows[0];
 
-      if (tiers && tiers.length > 0) {
-        for (const tier of tiers) {
-          await client.query(
-            `INSERT INTO product_tiers (product_id, name, count, description)
-             VALUES ($1, $2, $3, $4)`,
-            [product.id, tier.name, tier.count || 0, tier.description]
-          );
+        // Insert fractile linked to cell
+        await client.query(
+          `INSERT INTO product_fractiles (product_id, cell_id, name, count, description)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [product.id, insertedCell.id, fractileName, 0, fractileDescription]
+        );
+      } else {
+        // Backward-compatible component insertion (legacy array approach)
+        if (fractiles && fractiles.length > 0) {
+          for (const fractile of fractiles) {
+            await client.query(
+              `INSERT INTO product_fractiles (product_id, name, count, description)
+               VALUES ($1, $2, $3, $4)`,
+              [product.id, fractile.name, fractile.count || 0, fractile.description],
+            );
+          }
+        }
+
+        if (cells && cells.length > 0) {
+          for (const cell of cells) {
+            await client.query(
+              `INSERT INTO product_cells (product_id, name, count, description)
+               VALUES ($1, $2, $3, $4)`,
+              [product.id, cell.name, cell.count || 0, cell.description],
+            );
+          }
+        }
+
+        if (tiers && tiers.length > 0) {
+          for (const tier of tiers) {
+            await client.query(
+              `INSERT INTO product_tiers (product_id, name, count, description)
+               VALUES ($1, $2, $3, $4)`,
+              [product.id, tier.name, tier.count || 0, tier.description],
+            );
+          }
         }
       }
 

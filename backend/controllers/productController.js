@@ -1,5 +1,6 @@
 import Product from "../models/Product.js";
 import ProductComponent from "../models/ProductComponent.js";
+import ComponentTemplate from "../models/ComponentTemplate.js";
 
 class ProductController {
   // Create product with components
@@ -10,25 +11,33 @@ class ProductController {
         type,
         description,
         specifications,
-        fractiles,
-        cells,
-        tiers,
+        tier_id,
       } = req.body;
 
-      if (!name || !type) {
+      if (!name || !type || !tier_id) {
         return res.status(400).json({
           success: false,
-          message: "Product name and type are required",
+          message: "Product name, type, and tier_id are required",
         });
       }
 
-      const unit_id =
-        req.user.role === "admin" ? req.body.unit_id : req.user.unit_id;
+      // Get hierarchy from tier_templates (not product_tiers)
+      const hierarchy = await ComponentTemplate.getTierHierarchy(tier_id);
+
+      if (!hierarchy) {
+        return res.status(404).json({
+          success: false,
+          message: "Tier template not found",
+        });
+      }
+
+      // Use user's unit_id since templates don't have unit_id
+      const unit_id = req.user.unit_id;
 
       if (!unit_id) {
         return res.status(400).json({
           success: false,
-          message: "Unit ID is required",
+          message: "User must be assigned to a unit",
         });
       }
 
@@ -39,9 +48,14 @@ class ProductController {
         description,
         specifications,
         created_by: req.user.id,
-        fractiles: fractiles || [],
-        cells: cells || [],
-        tiers: tiers || [],
+        tier_id,
+        // Pass hierarchy info for creating product components
+        tierName: hierarchy.tier.name,
+        tierDescription: hierarchy.tier.description,
+        cellName: hierarchy.cell.name,
+        cellDescription: hierarchy.cell.description,
+        fractileName: hierarchy.fractile.name,
+        fractileDescription: hierarchy.fractile.description,
       };
 
       const product = await Product.create(productData);
