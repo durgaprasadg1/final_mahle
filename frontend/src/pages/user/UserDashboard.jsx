@@ -289,16 +289,21 @@ const UserDashboard = () => {
       );
       setBatchTimeSlots(slots);
       setBatchInterval(shiftConfig.timeInterval);
-      
+
       // Auto-populate previously selected slots for this batch
       // Find all time slots that match this batch's times
-      const matchedSlots = slots.filter(slot => {
-        const normStartTime = (batch.start_time || "").substring(0, 5);
-        const normEndTime = (batch.end_time || "").substring(0, 5);
-        return (slot.startTime === normStartTime || slot.startTime === batch.start_time) &&
-               (slot.endTime === normEndTime || slot.endTime === batch.end_time);
-      }).map(s => s.value);
-      
+      const matchedSlots = slots
+        .filter((slot) => {
+          const normStartTime = (batch.start_time || "").substring(0, 5);
+          const normEndTime = (batch.end_time || "").substring(0, 5);
+          return (
+            (slot.startTime === normStartTime ||
+              slot.startTime === batch.start_time) &&
+            (slot.endTime === normEndTime || slot.endTime === batch.end_time)
+          );
+        })
+        .map((s) => s.value);
+
       setSelectedBatchSlots(matchedSlots);
     }
   };
@@ -647,38 +652,82 @@ const UserDashboard = () => {
         return timeValue.length === 5 ? `${timeValue}:00` : timeValue;
       };
 
-      const payload = {
-        product_id: parseInt(batchForm.product_id, 10),
-        quantity_produced: parseInt(batchForm.quantity_produced, 10),
-        start_time: toTimeString(batchForm.start_time),
-        end_time: toTimeString(batchForm.end_time),
-        shift: batchForm.shift || "morning",
-        notes: batchForm.notes,
-        had_delay: batchForm.had_delay,
-        delay_reason:
-          batchForm.had_delay === "yes" ? batchForm.delay_reason : "",
-      };
+      let createdCount = 0;
+      const errors = [];
 
-        await batchAPI.create(payload);
-        createdCount++;
+      for (const slotValue of selectedBatchSlots) {
+        const [startTime, endTime] = slotValue.split("|");
+
+        if (!startTime || !endTime) {
+          errors.push(`Invalid time slot: ${slotValue}`);
+          continue;
+        }
+
+        const payload = {
+          product_id: parseInt(batchForm.product_id, 10),
+          quantity_produced: parseInt(batchForm.quantity_produced, 10),
+          start_time: toTimeString(startTime),
+          end_time: toTimeString(endTime),
+          shift: batchForm.shift || "morning",
+          notes: batchForm.notes,
+          had_delay: batchForm.had_delay,
+          delay_reason:
+            batchForm.had_delay === "yes" ? batchForm.delay_reason : "",
+        };
+
+        try {
+          await batchAPI.create(payload);
+          createdCount++;
+        } catch (err) {
+          errors.push(
+            `Failed to create batch for ${startTime}-${endTime}: ${
+              err.response?.data?.message || err.message
+            }`,
+          );
+        }
       }
-      
-      toast.success(`${createdCount} batch(es) created successfully`);
-      setShowBatchModal(false);
-      setBatchForm({
-        product_id: "",
-        quantity_produced: "",
-        start_time: "",
-        end_time: "",
-        shift: "morning",
-        notes: "",
-        had_delay: "no",
-        delay_reason: "",
-      });
-      setSelectedBatchSlots([]);
-      setBatchTimeSlots([]);
-      setBatchInterval("hourwise");
-      fetchBatches();
+
+      // Show results
+      if (createdCount > 0) {
+        toast.success(
+          `${createdCount} batch(es) created successfully${
+            errors.length > 0 ? ` (${errors.length} failed)` : ""
+          }`,
+        );
+      }
+
+      if (errors.length > 0) {
+        console.error("Batch creation errors:", errors);
+        if (createdCount === 0) {
+          toast.error(
+            `Failed to create batches: ${errors[0]}${
+              errors.length > 1 ? ` (and ${errors.length - 1} more)` : ""
+            }`,
+          );
+        }
+      }
+
+      // Close modal and reset form only if at least one batch was created
+      if (createdCount > 0) {
+        setShowBatchModal(false);
+        setBatchForm({
+          product_id: "",
+          quantity_produced: "",
+          start_time: "",
+          end_time: "",
+          shift: "morning",
+          notes: "",
+          had_delay: "no",
+          delay_reason: "",
+        });
+        setSelectedBatchSlots([]);
+        setBatchTimeSlots([]);
+        setBatchInterval("hourwise");
+        setUsePreviousBatch(false);
+        setSelectedPreviousBatchId("");
+        setFilteredPreviousBatches([]);
+        fetchBatches();
+      }
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to create batch");
     }
@@ -1751,25 +1800,30 @@ const UserDashboard = () => {
                 )}
               </div>
 
-              {/* Quantity field - only show when NOT copying from previous */}
-              {!usePreviousBatch && (
-                <div className="space-y-2">
+              {/* Quantity field - always visible, pre-filled when using previous batch */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
                   <Label htmlFor="quantity">Quantity Produced *</Label>
-                  <Input
-                    id="quantity"
-                    type="number"
-                    min="1"
-                    value={batchForm.quantity_produced}
-                    onChange={(e) =>
-                      setBatchForm({
-                        ...batchForm,
-                        quantity_produced: e.target.value,
-                      })
-                    }
-                    required
-                  />
+                  {usePreviousBatch && (
+                    <span className="text-xs text-gray-500">
+                      (from previous batch)
+                    </span>
+                  )}
                 </div>
-              )}
+                <Input
+                  id="quantity"
+                  type="number"
+                  min="1"
+                  value={batchForm.quantity_produced}
+                  onChange={(e) =>
+                    setBatchForm({
+                      ...batchForm,
+                      quantity_produced: e.target.value,
+                    })
+                  }
+                  required
+                />
+              </div>
 
               {/* Shift Selection - always visible but should respect copied batch shift */}
               <div className="space-y-2">
@@ -1825,8 +1879,9 @@ const UserDashboard = () => {
                 <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-64 overflow-y-auto bg-gray-50">
                   {batchTimeSlots
                     .filter((slot) => {
-                      const isCurrentSlotSelected =
-                        selectedBatchSlots.includes(slot.value);
+                      const isCurrentSlotSelected = selectedBatchSlots.includes(
+                        slot.value,
+                      );
                       if (isCurrentSlotSelected) return true;
 
                       const today = new Date().toISOString().split("T")[0];
@@ -1869,7 +1924,7 @@ const UserDashboard = () => {
                             setSelectedBatchSlots((prev) =>
                               prev.includes(slot.value)
                                 ? prev.filter((v) => v !== slot.value)
-                                : [...prev, slot.value]
+                                : [...prev, slot.value],
                             );
                           }}
                           className="w-4 h-4 cursor-pointer"
