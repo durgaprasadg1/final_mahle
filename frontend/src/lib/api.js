@@ -75,6 +75,7 @@ export const unitAPI = {
   getById: (id) => api.get(`/units/${id}`),
   create: (unitData) => api.post("/units", unitData),
   update: (id, unitData) => api.put(`/units/${id}`, unitData),
+  delete: (id) => api.delete(`/units/${id}`),
 };
 
 // Product API
@@ -90,12 +91,20 @@ export const productAPI = {
   createTemplate: (type, data) => api.post(`/templates/${type}`, data),
 };
 
-// Component templates API (fractiles, cells, tiers)
+// Component templates API (fractiles, cells, tiers) with hierarchy
 export const templateAPI = {
-  list: (type) => api.get(`/templates/${type}`),
+  list: (type, params) => api.get(`/templates/${type}`, { params }),
   create: (type, data) => api.post(`/templates/${type}`, data),
   update: (type, id, data) => api.put(`/templates/${type}/${id}`, data),
   delete: (type, id) => api.delete(`/templates/${type}/${id}`),
+  // Get cells for a specific fractile
+  getCellsByFractile: (fractileId) =>
+    api.get(`/templates/cells`, { params: { fractile_id: fractileId } }),
+  // Get tiers for a specific cell
+  getTiersByCell: (cellId) =>
+    api.get(`/templates/tiers`, { params: { cell_id: cellId } }),
+  // Get full hierarchy for a tier (for product creation)
+  getTierHierarchy: (tierId) => api.get(`/templates/tiers/${tierId}/hierarchy`),
 };
 
 // Batch API
@@ -108,6 +117,14 @@ export const batchAPI = {
   getByUnit: (unitId, params) => api.get(`/batches/unit/${unitId}`, { params }),
   getStatistics: (unitId, params) =>
     api.get(`/batches/unit/${unitId}/statistics`, { params }),
+  getUsedTimeSlots: (productId, shift, params) =>
+    api.get(`/batches/product/${productId}/shift/${shift}/used-slots`, {
+      params,
+    }),
+  getNextBatchInShift: (productId, shift, params) =>
+    api.get(`/batches/product/${productId}/shift/${shift}/next-batch`, {
+      params,
+    }),
 };
 
 export default api;

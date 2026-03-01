@@ -1,16 +1,16 @@
 import pool from "../config/database.js";
 
 class ProductComponent {
-  // ========== FRACTILES ==========
+// ---- Fractiles Ke Liye 
   
   static async createFractile(productId, fractileData) {
-    const { name, count, description } = fractileData;
+    const { name, count, description, cell_id } = fractileData;
     const query = `
-      INSERT INTO product_fractiles (product_id, name, count, description)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO product_fractiles (product_id, cell_id, name, count, description)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `;
-    const values = [productId, name, count || 0, description];
+    const values = [productId, cell_id || null, name, count || 0, description];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
@@ -85,16 +85,16 @@ class ProductComponent {
     await pool.query(query, [productId]);
   }
 
-  // ========== CELLS ==========
+  // cells ke Liye ...
   
   static async createCell(productId, cellData) {
-    const { name, count, description } = cellData;
+    const { name, count, description, tier_id } = cellData;
     const query = `
-      INSERT INTO product_cells (product_id, name, count, description)
-      VALUES ($1, $2, $3, $4)
+      INSERT INTO product_cells (product_id, tier_id, name, count, description)
+      VALUES ($1, $2, $3, $4, $5)
       RETURNING *
     `;
-    const values = [productId, name, count || 0, description];
+    const values = [productId, tier_id || null, name, count || 0, description];
     const result = await pool.query(query, values);
     return result.rows[0];
   }
@@ -169,7 +169,7 @@ class ProductComponent {
     await pool.query(query, [productId]);
   }
 
-  // ========== TIERS ==========
+  // Tiers ke Liye ...
   
   static async createTier(productId, tierData) {
     const { name, count, description } = tierData;
@@ -273,7 +273,7 @@ class ProductComponent {
     ]);
   }
 
-  // Replace all components for a product (used in updates)
+  // Updation ke time kaa replacement
   static async replaceAllComponents(productId, components) {
     const { fractiles, cells, tiers } = components;
 

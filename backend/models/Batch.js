@@ -3,48 +3,54 @@ import pool from "../config/database.js";
 class Batch {
   static async create(batchData) {
     const {
-      batch_number,
       product_id,
       unit_id,
       quantity_produced,
       shift,
       batch_in_shift,
+      batch_date,
       start_time,
       end_time,
       status,
       notes,
+      had_delay,
+      delay_reason,
       created_by,
     } = batchData;
 
     const query = `
       INSERT INTO batches (
-        batch_number, 
         product_id, 
         unit_id, 
         quantity_produced, 
         shift, 
         batch_in_shift, 
+        batch_date,
         start_time, 
         end_time, 
         status, 
-        notes, 
+        notes,
+        had_delay,
+        delay_reason,
         created_by
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
       RETURNING *
     `;
 
     const values = [
-      batch_number,
       product_id,
       unit_id,
       quantity_produced,
       shift,
       batch_in_shift,
+      batch_date || new Date().toISOString().split("T")[0],
       start_time,
       end_time,
       status || "completed",
       notes,
+      had_delay || "no",
+      delay_reason || null,
       created_by,
     ];
 
@@ -84,9 +90,9 @@ class Batch {
       LEFT JOIN products p ON b.product_id = p.id
       LEFT JOIN units ON b.unit_id = units.id
       LEFT JOIN users ON b.created_by = users.id
-      WHERE 1=1
+      WHERE 1=1  
     `;
-
+ // need to dynamically add filters to the query kyuki hmne wha 1=1 which is always true, to make it easier to append AND conditions without worrying about whether it's the first condition or not. Then we check for each possible filter and if it's present, we append the appropriate condition to the query and add the value to the values array. Finally, we execute the query with the accumulated values.
     const values = [];
     let paramCount = 1;
 
@@ -219,7 +225,7 @@ class Batch {
     return result.rows[0];
   }
 
-  // Get statistics for a unit
+  // ek unit ke stats nikalne ke lae
   static async getUnitStatistics(unitId, dateFrom, dateTo) {
     const query = `
       SELECT 
@@ -236,7 +242,7 @@ class Batch {
     return result.rows[0];
   }
 
-  // Get statistics by shift
+  // ek unit ke stats nikalne ke lae
   static async getShiftStatistics(unitId, dateFrom, dateTo) {
     const query = `
       SELECT 
@@ -260,39 +266,37 @@ class Batch {
     return result.rows;
   }
 
-  // Get next batch number for a shift on a specific date
-  static async getNextBatchInShift(unitId, shift, date = null) {
+//  shift me next batch number dene ke liye kaam
+  static async getNextBatchInShift(productId, shift, date = null) {
     const queryDate = date || new Date().toISOString().split("T")[0];
 
     const query = `
       SELECT COALESCE(MAX(batch_in_shift), 0) + 1 as next_batch
       FROM batches
-      WHERE unit_id = $1
+      WHERE product_id = $1
         AND shift = $2
-        AND DATE(created_at) = $3
+        AND batch_date = $3
     `;
 
-    const result = await pool.query(query, [unitId, shift, queryDate]);
+    const result = await pool.query(query, [productId, shift, queryDate]);
     return result.rows[0].next_batch;
   }
 
-  // Generate batch number with shift
-  // Format: UNITCODE-YYYY-MM-DD-SHIFT-###
-  // Example: U-GAMMA-2026-02-07-MORNING-001
-  static async generateBatchNumber(unitId, shift, batchInShift) {
-    const unitQuery = "SELECT code FROM units WHERE id = $1";
-    const unitResult = await pool.query(unitQuery, [unitId]);
+  // Get used time slots for a specific product on a date and shift
+  static async getUsedTimeSlots(productId, shift, date = null) {
+    const queryDate = date || new Date().toISOString().split("T")[0];
 
-    if (!unitResult.rows.length) {
-      throw new Error("Unit not found");
-    }
+    const query = `
+      SELECT start_time, end_time
+      FROM batches
+      WHERE product_id = $1
+        AND shift = $2
+        AND batch_date = $3
+      ORDER BY start_time
+    `;
 
-    const unitCode = unitResult.rows[0].code;
-    const today = new Date().toISOString().split("T")[0]; // YYYY-MM-DD
-    const shiftUpper = shift.toUpperCase();
-    const batchNum = batchInShift.toString().padStart(3, "0");
-
-    return `${unitCode}-${today}-${shiftUpper}-${batchNum}`;
+    const result = await pool.query(query, [productId, shift, queryDate]);
+    return result.rows;
   }
 
   // Get shift types enum

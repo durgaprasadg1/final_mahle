@@ -63,11 +63,18 @@ const UserDashboard = () => {
   const [reportDate, setReportDate] = useState(
     new Date().toISOString().split("T")[0],
   );
+  const [reportDateFrom, setReportDateFrom] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const [reportDateTo, setReportDateTo] = useState(
+    new Date().toISOString().split("T")[0],
+  );
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportResults, setReportResults] = useState([]);
   const [usePreviousBatch, setUsePreviousBatch] = useState(false);
   const [selectedPreviousBatchId, setSelectedPreviousBatchId] = useState("");
   const [filteredPreviousBatches, setFilteredPreviousBatches] = useState([]);
+  const [delayDialogBatch, setDelayDialogBatch] = useState(null);
 
   const VALID_SHIFT_TYPES = ["morning", "afternoon", "night"];
 
@@ -101,6 +108,16 @@ const UserDashboard = () => {
         );
         dateFrom = firstDay.toISOString().split("T")[0];
         dateTo = lastDay.toISOString().split("T")[0];
+      } else if (reportType === "range") {
+        dateFrom = reportDateFrom;
+        dateTo = reportDateTo;
+
+        // Validate date range
+        if (new Date(dateFrom) > new Date(dateTo)) {
+          toast.error("From date cannot be later than To date");
+          setIsGeneratingReport(false);
+          return;
+        }
       }
 
       const response = await batchAPI.getAll({
@@ -128,12 +145,13 @@ const UserDashboard = () => {
 
     const headers = [
       "ID",
-      "Batch Number",
       "Product",
       "Quantity",
       "Shift",
       "Start Time",
       "End Time",
+      "Delay",
+      "Delay Reason",
       "Notes",
       "Filled By",
       "Date",
@@ -141,12 +159,13 @@ const UserDashboard = () => {
 
     const rows = reportResults.map((b) => [
       b.id,
-      b.batch_number,
       b.product_name,
       b.quantity_produced,
       b.shift,
       b.start_time,
       b.end_time,
+      b.had_delay || "no",
+      (b.delay_reason || "").replace(/,/g, " "),
       (b.notes || "").replace(/,/g, " "),
       b.created_by_name,
       formatDateOnly(b.created_at),
@@ -203,7 +222,7 @@ const UserDashboard = () => {
   // Helper function to get unique previous batches (latest one per product)
   const getUniquePreviousBatches = () => {
     if (batches.length === 0) return [];
-    
+
     // Sort batches by creation date (newest first)
     const sortedBatches = [...batches].sort((a, b) => {
       const dateA = new Date(a.created_at || 0);
@@ -214,21 +233,37 @@ const UserDashboard = () => {
     // Get the latest batch for each product
     const seenProducts = new Set();
     const uniqueBatches = [];
-    
+
     for (const batch of sortedBatches) {
       if (!seenProducts.has(batch.product_id)) {
         uniqueBatches.push(batch);
         seenProducts.add(batch.product_id);
       }
     }
-    
+
     return uniqueBatches;
+  };
+
+  // Helper function to get previous batches for a specific product
+  const getPreviousBatchesForProduct = (productId) => {
+    if (!productId || batches.length === 0) return [];
+
+    // Sort batches by creation date (newest first) for the specific product
+    const productBatches = batches
+      .filter((b) => String(b.product_id) === String(productId))
+      .sort((a, b) => {
+        const dateA = new Date(a.created_at || 0);
+        const dateB = new Date(b.created_at || 0);
+        return dateB - dateA;
+      });
+
+    return productBatches;
   };
 
   // Helper function to copy data from previous batch
   const copyFromPreviousBatch = (batch) => {
     if (!batch) return;
-    
+
     setBatchForm({
       product_id: String(batch.product_id),
       quantity_produced: String(batch.quantity_produced),
@@ -272,65 +307,178 @@ const UserDashboard = () => {
     name: "",
     type: "",
     description: "",
-    fractiles: [],
-    cells: [],
-    tiers: [],
+    tier_id: "",
   });
 
-  const [componentInput, setComponentInput] = useState({
-    fractile: "",
-    cell: "",
-    tier: "",
-  });
-  const [componentSelect, setComponentSelect] = useState({
-    fractileSelect: "",
-    cellSelect: "",
-    tierSelect: "",
-  });
-  const [showCustom, setShowCustom] = useState({
-    fractile: false,
-    cell: false,
-    tier: false,
+  // Selected tier hierarchy info (fetched when tier is selected)
+  const [selectedTierHierarchy, setSelectedTierHierarchy] = useState(null);
+
+  // All tiers loaded with their hierarchy info
+  const [allTiers, setAllTiers] = useState([]);
+
+  // All fractiles and cells for filter dropdowns
+  const [allFractiles, setAllFractiles] = useState([]);
+  const [allCells, setAllCells] = useState([]);
+
+  // Product filters
+  const [productFilters, setProductFilters] = useState({
+    fractile_id: "",
+    cell_id: "",
+    tier_id: "",
   });
 
-  const [fractileOptions, setFractileOptions] = useState([
-    "Fractile-A",
-    "Fractile-B",
-    "Fractile-C",
-    "Fractile-D",
-    "Fractile-E",
-  ]);
-  const [cellOptions, setCellOptions] = useState([
-    "Cell-Type-1",
-    "Cell-Type-2",
-    "Cell-Type-3",
-    "Cell-Type-4",
-  ]);
-  const [tierOptions, setTierOptions] = useState([
-    "Top-Tier",
-    "Middle-Tier",
-    "Bottom-Tier",
-  ]);
-
-  const fetchComponentTemplates = async () => {
+  // Fetch all tiers with hierarchy info
+  const fetchAllTiers = async () => {
     try {
       const api = await import("../../lib/api");
-      const [fRes, cRes, tRes] = await Promise.all([
-        api.templateAPI.list("fractiles"),
-        api.templateAPI.list("cells"),
-        api.templateAPI.list("tiers"),
-      ]);
-      setFractileOptions(fRes.data.data.map((r) => r.name));
-      setCellOptions(cRes.data.data.map((r) => r.name));
-      setTierOptions(tRes.data.data.map((r) => r.name));
+      const res = await api.templateAPI.list("tiers");
+      // res.data.data contains tiers with cell_name, fractile_name, cell_id, fractile_id
+      setAllTiers(res.data.data);
     } catch (e) {
-      // keep defaults if backend unavailable
+      console.error("Failed to fetch tiers");
+    }
+  };
+
+  // Fetch all fractiles for filter dropdown
+  const fetchAllFractiles = async () => {
+    try {
+      const api = await import("../../lib/api");
+      const res = await api.templateAPI.list("fractiles");
+      setAllFractiles(res.data.data);
+    } catch (e) {
+      console.error("Failed to fetch fractiles");
+    }
+  };
+
+  // Fetch all cells for filter dropdown
+  const fetchAllCells = async () => {
+    try {
+      const api = await import("../../lib/api");
+      const res = await api.templateAPI.list("cells");
+      setAllCells(res.data.data);
+    } catch (e) {
+      console.error("Failed to fetch cells");
+    }
+  };
+
+  // Handle tier selection - lookup hierarchy from allTiers
+  const handleTierSelect = (tierId) => {
+    setProductForm((prev) => ({ ...prev, tier_id: tierId }));
+    if (!tierId) {
+      setSelectedTierHierarchy(null);
+      return;
+    }
+    // Find the selected tier from allTiers
+    const tier = allTiers.find((t) => String(t.id) === String(tierId));
+    if (tier) {
+      setSelectedTierHierarchy({
+        tier: { id: tier.id, name: tier.name },
+        cell: { id: tier.cell_id, name: tier.cell_name },
+        fractile: { id: tier.fractile_id, name: tier.fractile_name },
+      });
     }
   };
 
   useEffect(() => {
-    fetchComponentTemplates();
+    fetchAllTiers();
+    fetchAllFractiles();
+    fetchAllCells();
   }, []);
+
+  // Filter products based on selected filters
+  const getFilteredProducts = () => {
+    return products.filter((product) => {
+      const fractiles = Array.isArray(product.fractiles)
+        ? product.fractiles
+        : [];
+      const cells = Array.isArray(product.cells) ? product.cells : [];
+      const tiers = Array.isArray(product.tiers) ? product.tiers : [];
+
+      // Check fractile filter
+      if (productFilters.fractile_id) {
+        const hasFractile = fractiles.some(
+          (f) => String(f.id) === String(productFilters.fractile_id),
+        );
+        if (!hasFractile) return false;
+      }
+
+      // Check cell filter
+      if (productFilters.cell_id) {
+        const hasCell = cells.some(
+          (c) => String(c.id) === String(productFilters.cell_id),
+        );
+        if (!hasCell) return false;
+      }
+
+      // Check tier filter
+      if (productFilters.tier_id) {
+        const hasTier = tiers.some(
+          (t) => String(t.id) === String(productFilters.tier_id),
+        );
+        if (!hasTier) return false;
+      }
+
+      return true;
+    });
+  };
+
+  // Get cells filtered by selected fractile (for cascading filter)
+  const getFilteredCellsForFilter = () => {
+    if (!productFilters.fractile_id) return allCells;
+    return allCells.filter(
+      (c) => String(c.fractile_id) === String(productFilters.fractile_id),
+    );
+  };
+
+  // Get tiers filtered by selected cell (for cascading filter)
+  const getFilteredTiersForFilter = () => {
+    if (!productFilters.cell_id) {
+      if (!productFilters.fractile_id) return allTiers;
+      // Filter tiers by fractile if only fractile is selected
+      return allTiers.filter(
+        (t) => String(t.fractile_id) === String(productFilters.fractile_id),
+      );
+    }
+    return allTiers.filter(
+      (t) => String(t.cell_id) === String(productFilters.cell_id),
+    );
+  };
+
+  // Handle fractile filter change (cascade clear cell and tier)
+  const handleFractileFilterChange = (value) => {
+    setProductFilters({
+      fractile_id: value,
+      cell_id: "",
+      tier_id: "",
+    });
+  };
+
+  // Handle cell filter change (cascade clear tier)
+  const handleCellFilterChange = (value) => {
+    setProductFilters((prev) => ({
+      ...prev,
+      cell_id: value,
+      tier_id: "",
+    }));
+  };
+
+  // Clear all filters
+  const clearProductFilters = () => {
+    setProductFilters({
+      fractile_id: "",
+      cell_id: "",
+      tier_id: "",
+    });
+  };
+
+  // Check if any filter is active
+  const hasActiveFilters =
+    productFilters.fractile_id ||
+    productFilters.cell_id ||
+    productFilters.tier_id;
+
+  // Filtered products
+  const filteredProducts = getFilteredProducts();
 
   const [batchForm, setBatchForm] = useState({
     product_id: "",
@@ -403,66 +551,6 @@ const UserDashboard = () => {
     }
   };
 
-  const addFractile = () => {
-    const value = componentInput.fractile.trim();
-    if (value) {
-      setProductForm({
-        ...productForm,
-        fractiles: [...productForm.fractiles, { name: value, count: 0 }],
-      });
-      setComponentInput({ ...componentInput, fractile: "" });
-      setShowCustom({ ...showCustom, fractile: false });
-      setComponentSelect({ ...componentSelect, fractileSelect: "" });
-    }
-  };
-
-  const addCell = () => {
-    const value = componentInput.cell.trim();
-    if (value) {
-      setProductForm({
-        ...productForm,
-        cells: [...productForm.cells, { name: value, count: 0 }],
-      });
-      setComponentInput({ ...componentInput, cell: "" });
-      setShowCustom({ ...showCustom, cell: false });
-      setComponentSelect({ ...componentSelect, cellSelect: "" });
-    }
-  };
-
-  const addTier = () => {
-    const value = componentInput.tier.trim();
-    if (value) {
-      setProductForm({
-        ...productForm,
-        tiers: [...productForm.tiers, { name: value, count: 0 }],
-      });
-      setComponentInput({ ...componentInput, tier: "" });
-      setShowCustom({ ...showCustom, tier: false });
-      setComponentSelect({ ...componentSelect, tierSelect: "" });
-    }
-  };
-
-  const removeFractile = (index) => {
-    setProductForm({
-      ...productForm,
-      fractiles: productForm.fractiles.filter((_, i) => i !== index),
-    });
-  };
-
-  const removeCell = (index) => {
-    setProductForm({
-      ...productForm,
-      cells: productForm.cells.filter((_, i) => i !== index),
-    });
-  };
-
-  const removeTier = (index) => {
-    setProductForm({
-      ...productForm,
-      tiers: productForm.tiers.filter((_, i) => i !== index),
-    });
-  };
-
   const handleEditProduct = (product) => {
     setIsEditMode(true);
     setEditingProductId(product.id);
@@ -470,10 +558,14 @@ const UserDashboard = () => {
       name: product.name,
       type: product.type,
       description: product.description || "",
-      fractiles: Array.isArray(product.fractiles) ? product.fractiles : [],
-      cells: Array.isArray(product.cells) ? product.cells : [],
-      tiers: Array.isArray(product.tiers) ? product.tiers : [],
+      tier_id: product.tier_id || "",
     });
+    // Load hierarchy for edit mode if tier_id exists
+    if (product.tier_id) {
+      handleTierSelect(product.tier_id);
+    } else {
+      setSelectedTierHierarchy(null);
+    }
     setShowProductModal(true);
   };
 
@@ -488,14 +580,16 @@ const UserDashboard = () => {
       toast.error("Please select a product type");
       return;
     }
+    if (!productForm.tier_id) {
+      toast.error("Please select a tier");
+      return;
+    }
     try {
       const payload = {
         name: productForm.name,
         type: productForm.type,
         description: productForm.description,
-        fractiles: productForm.fractiles,
-        cells: productForm.cells,
-        tiers: productForm.tiers,
+        tier_id: parseInt(productForm.tier_id),
       };
 
       if (isEditMode && editingProductId) {
@@ -513,11 +607,9 @@ const UserDashboard = () => {
         name: "",
         type: "",
         description: "",
-        fractiles: [],
-        cells: [],
-        tiers: [],
+        tier_id: "",
       });
-      setComponentInput({ fractile: "", cell: "", tier: "" });
+      setSelectedTierHierarchy(null);
       fetchProducts();
     } catch (error) {
       toast.error(
@@ -555,22 +647,17 @@ const UserDashboard = () => {
         return timeValue.length === 5 ? `${timeValue}:00` : timeValue;
       };
 
-      // Create a batch for each selected time slot
-      let createdCount = 0;
-      for (const slotValue of selectedBatchSlots) {
-        const selectedSlot = batchTimeSlots.find(s => s.value === slotValue);
-        if (!selectedSlot) continue;
-
-        const payload = {
-          product_id: parseInt(batchForm.product_id, 10),
-          quantity_produced: parseInt(batchForm.quantity_produced, 10),
-          start_time: toTimeString(selectedSlot.startTime),
-          end_time: toTimeString(selectedSlot.endTime),
-          shift: batchForm.shift || "morning",
-          notes: batchForm.notes,
-          had_delay: batchForm.had_delay,
-          delay_reason: batchForm.had_delay === "yes" ? batchForm.delay_reason : "",
-        };
+      const payload = {
+        product_id: parseInt(batchForm.product_id, 10),
+        quantity_produced: parseInt(batchForm.quantity_produced, 10),
+        start_time: toTimeString(batchForm.start_time),
+        end_time: toTimeString(batchForm.end_time),
+        shift: batchForm.shift || "morning",
+        notes: batchForm.notes,
+        had_delay: batchForm.had_delay,
+        delay_reason:
+          batchForm.had_delay === "yes" ? batchForm.delay_reason : "",
+      };
 
         await batchAPI.create(payload);
         createdCount++;
@@ -884,7 +971,7 @@ const UserDashboard = () => {
       setUsePreviousBatch(false);
       setSelectedPreviousBatchId("");
       setFilteredPreviousBatches([]);
-      
+
       const shiftConfigs = loadBatchShiftConfigs();
       setAvailableShifts(shiftConfigs);
 
@@ -1035,9 +1122,98 @@ const UserDashboard = () => {
               </div>
             </CardHeader>
             <CardContent>
+              {/* Product Filters */}
+              <div className="flex flex-wrap items-center gap-3 mb-4 p-3 bg-gray-50 rounded-lg border">
+                <span className="text-sm font-medium text-gray-600">
+                  Filter by:
+                </span>
+
+                {/* Fractile Filter */}
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-gray-500">Fractile:</label>
+                  <select
+                    className="text-sm border rounded px-2 py-1 bg-white min-w-[120px]"
+                    value={productFilters.fractile_id}
+                    onChange={(e) => handleFractileFilterChange(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {allFractiles.map((f) => (
+                      <option key={f.id} value={f.id}>
+                        {f.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Cell Filter */}
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-gray-500">Cell:</label>
+                  <select
+                    className="text-sm border rounded px-2 py-1 bg-white min-w-[120px]"
+                    value={productFilters.cell_id}
+                    onChange={(e) => handleCellFilterChange(e.target.value)}
+                  >
+                    <option value="">All</option>
+                    {getFilteredCellsForFilter().map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Tier Filter */}
+                <div className="flex items-center gap-1">
+                  <label className="text-xs text-gray-500">Tier:</label>
+                  <select
+                    className="text-sm border rounded px-2 py-1 bg-white min-w-[120px]"
+                    value={productFilters.tier_id}
+                    onChange={(e) =>
+                      setProductFilters((prev) => ({
+                        ...prev,
+                        tier_id: e.target.value,
+                      }))
+                    }
+                  >
+                    <option value="">All</option>
+                    {getFilteredTiersForFilter().map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Clear Filters */}
+                {hasActiveFilters && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearProductFilters}
+                    className="text-gray-500 hover:text-gray-700"
+                  >
+                    Clear Filters
+                  </Button>
+                )}
+
+                {/* Results count */}
+                {hasActiveFilters && (
+                  <span className="text-xs text-gray-500 ml-auto">
+                    Showing {filteredProducts.length} of {products.length}{" "}
+                    products
+                  </span>
+                )}
+              </div>
+
               {loading ? (
                 <div className="text-center py-8">
                   <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">
+                  {hasActiveFilters
+                    ? "No products match the selected filters."
+                    : "No products found. Add a product to get started."}
                 </div>
               ) : (
                 <Table>
@@ -1051,7 +1227,7 @@ const UserDashboard = () => {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {products.map((product) => {
+                    {filteredProducts.map((product) => {
                       const fractiles = Array.isArray(product.fractiles)
                         ? product.fractiles
                         : [];
@@ -1197,10 +1373,12 @@ const UserDashboard = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Batch Number</TableHead>
                     <TableHead>Product</TableHead>
+                    <TableHead>Product Type</TableHead>
                     <TableHead>Quantity</TableHead>
-                    <TableHead>Slot Start</TableHead>
+                    <TableHead>Slot</TableHead>
+                    <TableHead>Shift</TableHead>
+                    <TableHead>Delay</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Filled By</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
@@ -1209,14 +1387,36 @@ const UserDashboard = () => {
                 <TableBody>
                   {batches.map((batch) => (
                     <TableRow key={batch.id}>
-                      <TableCell className="font-medium font-mono text-xs">
-                        {batch.batch_number}
-                      </TableCell>
                       <TableCell>{batch.product_name}</TableCell>
+                      <TableCell className="capitalize">
+                        {batch.product_type?.replace(/_/g, " ") || "-"}
+                      </TableCell>
                       <TableCell className="font-semibold">
                         {batch.quantity_produced}
                       </TableCell>
-                      <TableCell>{formatSlotStart(batch.start_time)}</TableCell>
+                      <TableCell className="text-sm">
+                        {batch.start_time} - {batch.end_time}
+                      </TableCell>
+                      <TableCell className="capitalize">
+                        {batch.shift}
+                      </TableCell>
+                      <TableCell>
+                        {batch.had_delay === "yes" ? (
+                          <div className="flex items-center gap-2">
+                            <Badge variant="destructive">Yes</Badge>
+                            {batch.delay_reason && (
+                              <button
+                                onClick={() => setDelayDialogBatch(batch)}
+                                className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                              >
+                                View Reason
+                              </button>
+                            )}
+                          </div>
+                        ) : (
+                          <Badge variant="secondary">No</Badge>
+                        )}
+                      </TableCell>
                       <TableCell>
                         <Badge variant="success">{batch.status}</Badge>
                       </TableCell>
@@ -1272,11 +1472,9 @@ const UserDashboard = () => {
                 name: "",
                 type: "",
                 description: "",
-                fractiles: [],
-                cells: [],
-                tiers: [],
+                tier_id: "",
               });
-              setComponentInput({ fractile: "", cell: "", tier: "" });
+              setSelectedTierHierarchy(null);
             }
           }}
         >
@@ -1320,178 +1518,49 @@ const UserDashboard = () => {
               </div>
 
               <div className="space-y-4 border-t pt-4">
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="fractile" className="text-sm">
-                      Fractiles
-                    </Label>
-                    <div className="flex gap-2">
-                      <Select
-                        id="fractile"
-                        value={componentSelect.fractileSelect}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "create_new") {
-                            setShowCustom({ ...showCustom, fractile: true });
-                            setComponentSelect({
-                              ...componentSelect,
-                              fractileSelect: "",
-                            });
-                          } else if (val) {
-                            setProductForm({
-                              ...productForm,
-                              fractiles: [
-                                ...productForm.fractiles,
-                                { name: val, count: 0 },
-                              ],
-                            });
-                            setComponentSelect({
-                              ...componentSelect,
-                              fractileSelect: "",
-                            });
-                          }
-                        }}
-                      >
-                        <option value="">Select Fractile</option>
-                        {fractileOptions.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                    {productForm.fractiles.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {productForm.fractiles.map((f, idx) => (
-                          <Badge key={idx} variant="secondary">
-                            {f.name}
-                            <button
-                              type="button"
-                              onClick={() => removeFractile(idx)}
-                              className="ml-2 hover:text-red-500"
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="cell" className="text-sm">
-                      Cells
-                    </Label>
-                    <div className="flex gap-2">
-                      <Select
-                        id="cell"
-                        value={componentSelect.cellSelect}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "create_new") {
-                            setShowCustom({ ...showCustom, cell: true });
-                            setComponentSelect({
-                              ...componentSelect,
-                              cellSelect: "",
-                            });
-                          } else if (val) {
-                            setProductForm({
-                              ...productForm,
-                              cells: [
-                                ...productForm.cells,
-                                { name: val, count: 0 },
-                              ],
-                            });
-                            setComponentSelect({
-                              ...componentSelect,
-                              cellSelect: "",
-                            });
-                          }
-                        }}
-                      >
-                        <option value="">Select Cell</option>
-                        {cellOptions.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                    {productForm.cells.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {productForm.cells.map((c, idx) => (
-                          <Badge key={idx} variant="secondary">
-                            {c.name}
-                            <button
-                              type="button"
-                              onClick={() => removeCell(idx)}
-                              className="ml-2 hover:text-red-500"
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="tier" className="text-sm">
-                      Tiers
-                    </Label>
-                    <div className="flex gap-2">
-                      <Select
-                        id="tier"
-                        value={componentSelect.tierSelect}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          if (val === "create_new") {
-                            setShowCustom({ ...showCustom, tier: true });
-                            setComponentSelect({
-                              ...componentSelect,
-                              tierSelect: "",
-                            });
-                          } else if (val) {
-                            setProductForm({
-                              ...productForm,
-                              tiers: [
-                                ...productForm.tiers,
-                                { name: val, count: 0 },
-                              ],
-                            });
-                            setComponentSelect({
-                              ...componentSelect,
-                              tierSelect: "",
-                            });
-                          }
-                        }}
-                      >
-                        <option value="">Select Tier</option>
-                        {tierOptions.map((o) => (
-                          <option key={o} value={o}>
-                            {o}
-                          </option>
-                        ))}
-                      </Select>
-                    </div>
-                    {productForm.tiers.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {productForm.tiers.map((t, idx) => (
-                          <Badge key={idx} variant="secondary">
-                            {t.name}
-                            <button
-                              type="button"
-                              onClick={() => removeTier(idx)}
-                              className="ml-2 hover:text-red-500"
-                            >
-                              ×
-                            </button>
-                          </Badge>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                <div className="space-y-2">
+                  <Label htmlFor="tier" className="text-sm">
+                    Tier *
+                  </Label>
+                  <p className="text-xs text-gray-500">
+                    Select a tier - the associated Fractile and Cell will be
+                    automatically linked
+                  </p>
+                  <Select
+                    id="tier"
+                    value={productForm.tier_id}
+                    onChange={(e) => handleTierSelect(e.target.value)}
+                  >
+                    <option value="">Select Tier</option>
+                    {allTiers.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.fractile_name} → {t.cell_name})
+                      </option>
+                    ))}
+                  </Select>
                 </div>
+
+                {/* Show selected hierarchy summary */}
+                {selectedTierHierarchy && (
+                  <div className="bg-blue-50 p-3 rounded-md border border-blue-200">
+                    <p className="text-sm font-medium text-blue-800">
+                      Linked Hierarchy:
+                    </p>
+                    <div className="flex items-center gap-2 text-sm text-blue-700 mt-1">
+                      <Badge className="bg-blue-100 text-blue-800">
+                        {selectedTierHierarchy.fractile?.name}
+                      </Badge>
+                      <span>→</span>
+                      <Badge className="bg-green-100 text-green-800">
+                        {selectedTierHierarchy.cell?.name}
+                      </Badge>
+                      <span>→</span>
+                      <Badge className="bg-purple-100 text-purple-800">
+                        {selectedTierHierarchy.tier?.name}
+                      </Badge>
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -1527,8 +1596,8 @@ const UserDashboard = () => {
 
       {/* Create Batch Modal */}
       {activeTab === "batches" && (
-        <Dialog 
-          open={showBatchModal} 
+        <Dialog
+          open={showBatchModal}
           onOpenChange={(open) => {
             setShowBatchModal(open);
             if (!open) {
@@ -1543,27 +1612,70 @@ const UserDashboard = () => {
               <DialogTitle>Record Production Batch</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleCreateBatch} className="space-y-4 mt-4">
-              {/* Option to copy from previous batch */}
+              {/* Product Selection - Always visible */}
+              <div className="space-y-2">
+                <Label htmlFor="batchProduct">Product *</Label>
+                <Select
+                  id="batchProduct"
+                  value={batchForm.product_id}
+                  onChange={(e) => {
+                    const productId = e.target.value;
+                    setBatchForm({
+                      ...batchForm,
+                      product_id: productId,
+                    });
+                    // Reset previous batch selection when product changes
+                    if (usePreviousBatch) {
+                      setUsePreviousBatch(false);
+                      setSelectedPreviousBatchId("");
+                      setFilteredPreviousBatches([]);
+                    }
+                  }}
+                  required
+                  disabled={usePreviousBatch}
+                >
+                  <option value="">Select Product</option>
+                  {products.map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name} ({formatProductType(product.type)})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
               <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                <label className="flex items-center gap-3 cursor-pointer">
+                <label
+                  className={`flex items-center gap-3 ${
+                    batchForm.product_id &&
+                    getPreviousBatchesForProduct(batchForm.product_id).length >
+                      0
+                      ? "cursor-pointer"
+                      : "cursor-not-allowed opacity-50"
+                  }`}
+                >
                   <input
                     type="checkbox"
                     checked={usePreviousBatch}
                     onChange={(e) => {
                       const checked = e.target.checked;
                       setUsePreviousBatch(checked);
-                      if (checked) {
-                        const uniqueBatches = getUniquePreviousBatches();
-                        setFilteredPreviousBatches(uniqueBatches);
+                      if (checked && batchForm.product_id) {
+                        const productBatches = getPreviousBatchesForProduct(
+                          batchForm.product_id,
+                        );
+                        setFilteredPreviousBatches(productBatches);
                         // Auto-select the first previous batch if available
-                        if (uniqueBatches.length > 0) {
-                          setSelectedPreviousBatchId(String(uniqueBatches[0].id));
-                          copyFromPreviousBatch(uniqueBatches[0]);
+                        if (productBatches.length > 0) {
+                          setSelectedPreviousBatchId(
+                            String(productBatches[0].id),
+                          );
+                          copyFromPreviousBatch(productBatches[0]);
                         }
                       } else {
-                        // Reset form when unchecking
+                        // Keep product_id when unchecking
+                        const currentProductId = batchForm.product_id;
                         setBatchForm({
-                          product_id: "",
+                          product_id: currentProductId,
                           quantity_produced: "",
                           start_time: "",
                           end_time: "",
@@ -1578,19 +1690,35 @@ const UserDashboard = () => {
                         setBatchTimeSlots([]);
                       }
                     }}
+                    disabled={
+                      !batchForm.product_id ||
+                      getPreviousBatchesForProduct(batchForm.product_id)
+                        .length === 0
+                    }
                     className="w-5 h-5 cursor-pointer"
                   />
                   <span className="font-semibold text-sm text-blue-900">
-                    Copy from Previous Batch
+                    Same as Previous Batch
+                    {batchForm.product_id &&
+                      getPreviousBatchesForProduct(batchForm.product_id)
+                        .length === 0 && (
+                        <span className="font-normal text-xs ml-2">
+                          (No previous batches for this product)
+                        </span>
+                      )}
+                    {!batchForm.product_id && (
+                      <span className="font-normal text-xs ml-2">
+                        (Select a product first)
+                      </span>
+                    )}
                   </span>
                 </label>
-                <p className="text-xs text-blue-700 ml-8">
-                  Select a previously created batch and only the time slot can be changed. All other information will be copied automatically.
-                </p>
 
                 {usePreviousBatch && (
                   <div className="mt-3 ml-8 space-y-2">
-                    <Label htmlFor="previousBatch">Select Previous Batch *</Label>
+                    <Label htmlFor="previousBatch">
+                      Select Previous Batch *
+                    </Label>
                     <Select
                       id="previousBatch"
                       value={selectedPreviousBatchId}
@@ -1598,7 +1726,7 @@ const UserDashboard = () => {
                         const batchId = e.target.value;
                         setSelectedPreviousBatchId(batchId);
                         const selectedBatch = filteredPreviousBatches.find(
-                          (b) => String(b.id) === batchId
+                          (b) => String(b.id) === batchId,
                         );
                         if (selectedBatch) {
                           copyFromPreviousBatch(selectedBatch);
@@ -1609,38 +1737,22 @@ const UserDashboard = () => {
                       <option value="">Select a batch to copy</option>
                       {filteredPreviousBatches.map((batch) => (
                         <option key={batch.id} value={String(batch.id)}>
-                          {batch.product_name} - {batch.batch_number} (Qty: {batch.quantity_produced}, Shift: {batch.shift})
+                          {batch.start_time} to {batch.end_time} (Qty:{" "}
+                          {batch.quantity_produced}, Shift: {batch.shift})
                         </option>
                       ))}
                     </Select>
                     {filteredPreviousBatches.length === 0 && (
-                      <p className="text-xs text-gray-500">No previous batches available</p>
+                      <p className="text-xs text-gray-500">
+                        No previous batches available for this product
+                      </p>
                     )}
                   </div>
                 )}
               </div>
 
-              {/* Product & Quantity fields - only show when NOT copying from previous */}
+              {/* Quantity field - only show when NOT copying from previous */}
               {!usePreviousBatch && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="batchProduct">Product *</Label>
-                  <Select
-                    id="batchProduct"
-                    value={batchForm.product_id}
-                    onChange={(e) =>
-                      setBatchForm({ ...batchForm, product_id: e.target.value })
-                    }
-                    required
-                  >
-                    <option value="">Select Product</option>
-                    {products.map((product) => (
-                      <option key={product.id} value={product.id}>
-                        {product.name} ({formatProductType(product.type)})
-                      </option>
-                    ))}
-                  </Select>
-                </div>
                 <div className="space-y-2">
                   <Label htmlFor="quantity">Quantity Produced *</Label>
                   <Input
@@ -1657,15 +1769,16 @@ const UserDashboard = () => {
                     required
                   />
                 </div>
-              </div>
               )}
-              
+
               {/* Shift Selection - always visible but should respect copied batch shift */}
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Label>Shift *</Label>
                   {usePreviousBatch && (
-                    <span className="text-xs text-gray-500">(from previous batch)</span>
+                    <span className="text-xs text-gray-500">
+                      (from previous batch)
+                    </span>
                   )}
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
@@ -1712,7 +1825,6 @@ const UserDashboard = () => {
                 <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-64 overflow-y-auto bg-gray-50">
                   {batchTimeSlots
                     .filter((slot) => {
-                      // Don't show slots that have already been used for this product TODAY
                       const isCurrentSlotSelected =
                         selectedBatchSlots.includes(slot.value);
                       if (isCurrentSlotSelected) return true;
@@ -1762,7 +1874,9 @@ const UserDashboard = () => {
                           }}
                           className="w-4 h-4 cursor-pointer"
                         />
-                        <span className="text-sm font-medium">{slot.label}</span>
+                        <span className="text-sm font-medium">
+                          {slot.label}
+                        </span>
                       </label>
                     ))}
                 </div>
@@ -1790,7 +1904,9 @@ const UserDashboard = () => {
               <div className="space-y-2">
                 <Label>Production Delay Occurred? *</Label>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                  <label className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${batchForm.had_delay === "yes" ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"}`}>
+                  <label
+                    className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${batchForm.had_delay === "yes" ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"}`}
+                  >
                     <input
                       type="checkbox"
                       checked={batchForm.had_delay === "yes"}
@@ -1799,14 +1915,22 @@ const UserDashboard = () => {
                       }
                       className="w-4 h-4 cursor-pointer"
                     />
-                    <span className="text-sm font-medium">Yes, delay occurred</span>
+                    <span className="text-sm font-medium">
+                      Yes, delay occurred
+                    </span>
                   </label>
-                  <label className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${batchForm.had_delay === "no" ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"}`}>
+                  <label
+                    className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer transition-colors ${batchForm.had_delay === "no" ? "border-primary bg-primary/10" : "border-gray-200 hover:border-gray-300"}`}
+                  >
                     <input
                       type="checkbox"
                       checked={batchForm.had_delay === "no"}
                       onChange={() =>
-                        setBatchForm({ ...batchForm, had_delay: "no", delay_reason: "" })
+                        setBatchForm({
+                          ...batchForm,
+                          had_delay: "no",
+                          delay_reason: "",
+                        })
                       }
                       className="w-4 h-4 cursor-pointer"
                     />
@@ -1817,13 +1941,18 @@ const UserDashboard = () => {
               {batchForm.had_delay === "yes" && (
                 <div className="space-y-2 animate-in fade-in">
                   <Label htmlFor="delayReason">Reason for Delay *</Label>
-                  <p className="text-xs text-gray-500">Describe the cause of the production delay</p>
+                  <p className="text-xs text-gray-500">
+                    Describe the cause of the production delay
+                  </p>
                   <Textarea
                     id="delayReason"
                     placeholder="Exa : Equipment malfunction, Power outage, etc."
                     value={batchForm.delay_reason}
                     onChange={(e) =>
-                      setBatchForm({ ...batchForm, delay_reason: e.target.value })
+                      setBatchForm({
+                        ...batchForm,
+                        delay_reason: e.target.value,
+                      })
                     }
                     rows={3}
                     required={batchForm.had_delay === "yes"}
@@ -1858,29 +1987,53 @@ const UserDashboard = () => {
             <DialogTitle>Production Reports</DialogTitle>
           </DialogHeader>
           <div className="space-y-6 mt-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg">
-              <div className="space-y-2">
-                <Label>Report Type</Label>
-                <Select
-                  value={reportType}
-                  onChange={(e) => setReportType(e.target.value)}
-                >
-                  <option value="daily">Daily</option>
-                  <option value="weekly">Weekly</option>
-                  <option value="monthly">Monthly</option>
-                </Select>
+            <div className="grid grid-cols-1 gap-4 p-4 bg-gray-50 rounded-lg">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Report Type</Label>
+                  <Select
+                    value={reportType}
+                    onChange={(e) => setReportType(e.target.value)}
+                  >
+                    <option value="daily">Daily</option>
+                    <option value="weekly">Weekly</option>
+                    <option value="monthly">Monthly</option>
+                    <option value="range">Custom Range</option>
+                  </Select>
+                </div>
+                {reportType !== "range" ? (
+                  <div className="space-y-2">
+                    <Label>
+                      Select {reportType === "monthly" ? "Month" : "Date"}
+                    </Label>
+                    <Input
+                      type={reportType === "monthly" ? "month" : "date"}
+                      value={reportDate}
+                      onChange={(e) => setReportDate(e.target.value)}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <Label>From Date</Label>
+                      <Input
+                        type="date"
+                        value={reportDateFrom}
+                        onChange={(e) => setReportDateFrom(e.target.value)}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>To Date</Label>
+                      <Input
+                        type="date"
+                        value={reportDateTo}
+                        onChange={(e) => setReportDateTo(e.target.value)}
+                      />
+                    </div>
+                  </>
+                )}
               </div>
-              <div className="space-y-2">
-                <Label>
-                  Select {reportType === "monthly" ? "Month" : "Date"}
-                </Label>
-                <Input
-                  type={reportType === "monthly" ? "month" : "date"}
-                  value={reportDate}
-                  onChange={(e) => setReportDate(e.target.value)}
-                />
-              </div>
-              <div className="flex items-end space-x-2">
+              <div className="flex items-start space-x-2">
                 <Button
                   className="flex-1"
                   onClick={handleGenerateReport}
@@ -1981,6 +2134,44 @@ const UserDashboard = () => {
                 </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delay Reason Dialog */}
+      <Dialog
+        open={!!delayDialogBatch}
+        onOpenChange={() => setDelayDialogBatch(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delay Reason</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Product:</p>
+              <p className="font-medium">{delayDialogBatch?.product_name}</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Shift:</p>
+              <p className="font-medium capitalize">
+                {delayDialogBatch?.shift}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Time Slot:</p>
+              <p className="font-medium">
+                {delayDialogBatch?.start_time} - {delayDialogBatch?.end_time}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500 mb-1">Delay Reason:</p>
+              <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <p className="text-sm whitespace-pre-wrap">
+                  {delayDialogBatch?.delay_reason}
+                </p>
+              </div>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

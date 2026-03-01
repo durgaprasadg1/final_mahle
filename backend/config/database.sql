@@ -3,9 +3,12 @@ DROP FUNCTION IF EXISTS generate_batch_number(INTEGER, shift_type, INTEGER, DATE
 DROP FUNCTION IF EXISTS get_shift_production(INTEGER, shift_type, DATE) CASCADE;
 DROP FUNCTION IF EXISTS get_daily_production_summary(INTEGER, DATE) CASCADE;
 DROP FUNCTION IF EXISTS get_batches_by_shift(INTEGER, shift_type, DATE) CASCADE;
+DROP FUNCTION IF EXISTS get_used_time_slots(INTEGER, shift_type, DATE) CASCADE;
 DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
 
-
+DROP TABLE IF EXISTS tier_templates CASCADE;
+DROP TABLE IF EXISTS cell_templates CASCADE;
+DROP TABLE IF EXISTS fractile_templates CASCADE;
 DROP TABLE IF EXISTS batches CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS product_fractiles CASCADE;
@@ -69,6 +72,7 @@ CREATE TABLE products (
 CREATE TABLE product_fractiles (
     id SERIAL PRIMARY KEY,
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    cell_id INTEGER,
     name VARCHAR(100) NOT NULL,
     count INTEGER DEFAULT 0,
     description TEXT,
@@ -80,6 +84,7 @@ CREATE TABLE product_fractiles (
 CREATE TABLE product_cells (
     id SERIAL PRIMARY KEY,
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    tier_id INTEGER,
     name VARCHAR(100) NOT NULL,
     count INTEGER DEFAULT 0,
     description TEXT,
@@ -97,7 +102,15 @@ CREATE TABLE product_tiers (
     CONSTRAINT unique_product_tier UNIQUE(product_id, name)
 );
 
--- Templates for reusable components (global)
+ALTER TABLE product_cells
+ADD CONSTRAINT fk_product_cells_tier
+FOREIGN KEY (tier_id) REFERENCES product_tiers(id) ON DELETE CASCADE;
+
+ALTER TABLE product_fractiles
+ADD CONSTRAINT fk_product_fractiles_cell
+FOREIGN KEY (cell_id) REFERENCES product_cells(id) ON DELETE CASCADE;
+
+-- Templates for reusable components (global) with hierarchy: Fractile → Cell → Tier
 CREATE TABLE fractile_templates (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
@@ -109,41 +122,51 @@ CREATE TABLE fractile_templates (
 
 CREATE TABLE cell_templates (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
+    fractile_id INTEGER NOT NULL REFERENCES fractile_templates(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
     description TEXT,
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_cell_per_fractile UNIQUE(fractile_id, name)
 );
 
 CREATE TABLE tier_templates (
     id SERIAL PRIMARY KEY,
-    name VARCHAR(100) NOT NULL UNIQUE,
+    cell_id INTEGER NOT NULL REFERENCES cell_templates(id) ON DELETE CASCADE,
+    name VARCHAR(100) NOT NULL,
     description TEXT,
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_tier_per_cell UNIQUE(cell_id, name)
 );
+
+CREATE INDEX idx_cell_templates_fractile ON cell_templates(fractile_id);
+CREATE INDEX idx_tier_templates_cell ON tier_templates(cell_id);
 
 CREATE TABLE batches (
     id SERIAL PRIMARY KEY,
-    batch_number VARCHAR(50) NOT NULL UNIQUE,
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
     quantity_produced INTEGER NOT NULL DEFAULT 0,
     
-    shift shift_type NOT NULL, -- morning, afternoon, or night
+    shift shift_type NOT NULL, 
     batch_in_shift INTEGER NOT NULL, 
+    batch_date DATE NOT NULL DEFAULT CURRENT_DATE,
     
-    start_time TIME, 
-    end_time TIME,   
+    start_time TIME NOT NULL, 
+    end_time TIME NOT NULL,   
     status VARCHAR(50) DEFAULT 'completed',
     notes TEXT,
+    had_delay VARCHAR(3) DEFAULT 'no',
+    delay_reason TEXT,
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
    
-    CONSTRAINT batch_in_shift_positive CHECK (batch_in_shift > 0)
+    CONSTRAINT batch_in_shift_positive CHECK (batch_in_shift > 0),
+    CONSTRAINT unique_product_shift_time UNIQUE(product_id, shift, batch_date, start_time)
 );
 
 
@@ -153,13 +176,17 @@ CREATE INDEX idx_users_role ON users(role);
 CREATE INDEX idx_products_unit ON products(unit_id);
 CREATE INDEX idx_products_type ON products(type);
 CREATE INDEX idx_product_fractiles_product ON product_fractiles(product_id);
+CREATE INDEX idx_product_fractiles_cell ON product_fractiles(cell_id);
 CREATE INDEX idx_product_cells_product ON product_cells(product_id);
+CREATE INDEX idx_product_cells_tier ON product_cells(tier_id);
 CREATE INDEX idx_product_tiers_product ON product_tiers(product_id);
+CREATE UNIQUE INDEX ux_product_cells_tier_unique ON product_cells(tier_id) WHERE tier_id IS NOT NULL;
+CREATE UNIQUE INDEX ux_product_fractiles_cell_unique ON product_fractiles(cell_id) WHERE cell_id IS NOT NULL;
 CREATE INDEX idx_batches_product ON batches(product_id);
 CREATE INDEX idx_batches_unit ON batches(unit_id);
-CREATE INDEX idx_batches_batch_number ON batches(batch_number);
 CREATE INDEX idx_batches_shift ON batches(shift);
-CREATE INDEX idx_batches_date_shift ON batches(DATE(created_at), shift);
+CREATE INDEX idx_batches_date_shift ON batches(batch_date, shift);
+CREATE INDEX idx_batches_product_date ON batches(product_id, batch_date);
 
 
 INSERT INTO units (name, code, description, location) VALUES 
@@ -206,7 +233,7 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 
 CREATE OR REPLACE FUNCTION get_next_batch_in_shift(
-    p_unit_id INTEGER,
+    p_product_id INTEGER,
     p_shift shift_type,
     p_date DATE DEFAULT CURRENT_DATE
 ) RETURNS INTEGER AS $$
@@ -216,43 +243,15 @@ BEGIN
     SELECT COALESCE(MAX(batch_in_shift), 0) + 1
     INTO next_batch
     FROM batches
-    WHERE unit_id = p_unit_id
+    WHERE product_id = p_product_id
     AND shift = p_shift
-    AND DATE(created_at) = p_date;
+    AND batch_date = p_date;
     
     RETURN next_batch;
 END;
 $$ LANGUAGE plpgsql;
 
-
-CREATE OR REPLACE FUNCTION generate_batch_number(
-    p_unit_id INTEGER,
-    p_shift shift_type,
-    p_batch_in_shift INTEGER,
-    p_date DATE DEFAULT CURRENT_DATE
-) RETURNS VARCHAR AS $$
-DECLARE
-    unit_code VARCHAR(10);
-    shift_code VARCHAR(10);
-    batch_num VARCHAR(50);
-BEGIN
-    -- Get unit code
-    SELECT code INTO unit_code FROM units WHERE id = p_unit_id;
-    
-    -- Format shift code
-    shift_code := UPPER(p_shift::TEXT);
-    
-    -- Generate batch number
-    batch_num := unit_code || '-' || 
-                 TO_CHAR(p_date, 'YYYY-MM-DD') || '-' ||
-                 shift_code || '-' ||
-                 LPAD(p_batch_in_shift::TEXT, 3, '0');
-    
-    RETURN batch_num;
-END;
-$$ LANGUAGE plpgsql;
-
--- Function to get total production for a shift
+-- Ek shift ka saara production data dega
 CREATE OR REPLACE FUNCTION get_shift_production(
     p_unit_id INTEGER,
     p_shift shift_type,
@@ -272,11 +271,11 @@ BEGIN
     JOIN products p ON b.product_id = p.id
     WHERE b.unit_id = p_unit_id
     AND b.shift = p_shift
-    AND DATE(b.created_at) = p_date;
+    AND b.batch_date = p_date;
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to get daily production summary
+-- Roz ki Production summary dene ke liye function, shift-wise breakdown ke saath
 CREATE OR REPLACE FUNCTION get_daily_production_summary(
     p_unit_id INTEGER,
     p_date DATE DEFAULT CURRENT_DATE
@@ -295,7 +294,7 @@ BEGIN
         ROUND(AVG(b.quantity_produced), 2) as avg_quantity
     FROM batches b
     WHERE b.unit_id = p_unit_id
-    AND DATE(b.created_at) = p_date
+    AND b.batch_date = p_date
     GROUP BY b.shift
     ORDER BY 
         CASE b.shift
@@ -306,14 +305,13 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to get all batches for a specific shift on a specific date
+-- specific shift ke liye batches laane ke liye 
 CREATE OR REPLACE FUNCTION get_batches_by_shift(
     p_unit_id INTEGER,
     p_shift shift_type,
     p_date DATE DEFAULT CURRENT_DATE
 ) RETURNS TABLE(
     batch_id INTEGER,
-    batch_number VARCHAR,
     product_name VARCHAR,
     quantity_produced INTEGER,
     batch_in_shift INTEGER,
@@ -326,7 +324,6 @@ BEGIN
     RETURN QUERY
     SELECT 
         b.id,
-        b.batch_number,
         p.name,
         b.quantity_produced,
         b.batch_in_shift,
@@ -338,8 +335,30 @@ BEGIN
     JOIN products p ON b.product_id = p.id
     WHERE b.unit_id = p_unit_id
     AND b.shift = p_shift
-    AND DATE(b.created_at) = p_date
+    AND b.batch_date = p_date
     ORDER BY b.batch_in_shift;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function to get used time slots for a specific product on a date and shift
+CREATE OR REPLACE FUNCTION get_used_time_slots(
+    p_product_id INTEGER,
+    p_shift shift_type,
+    p_date DATE DEFAULT CURRENT_DATE
+) RETURNS TABLE(
+    start_time TIME,
+    end_time TIME
+) AS $$
+BEGIN
+    RETURN QUERY
+    SELECT 
+        b.start_time,
+        b.end_time
+    FROM batches b
+    WHERE b.product_id = p_product_id
+    AND b.shift = p_shift
+    AND b.batch_date = p_date
+    ORDER BY b.start_time;
 END;
 $$ LANGUAGE plpgsql;
 
