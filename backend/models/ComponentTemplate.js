@@ -1,7 +1,6 @@
 import pool from "../config/database.js";
 
 class ComponentTemplate {
-  // List templates - type: 'fractile', 'cell', 'tier'
   static async list(type, parentId = null) {
     if (type === "fractile") {
       const result = await pool.query(

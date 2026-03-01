@@ -110,6 +110,42 @@ class UnitController {
       });
     }
   }
+
+  static async deleteUnit(req, res) {
+    try {
+      const { id } = req.params;
+
+      const unit = await Unit.findById(id);
+      if (!unit) {
+        return res.status(404).json({
+          success: false,
+          message: "Unit not found",
+        });
+      }
+
+      // Check if unit has users or products
+      if (parseInt(unit.user_count) > 0 || parseInt(unit.product_count) > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Cannot delete unit. It has ${unit.user_count} user(s) and ${unit.product_count} product(s) associated with it.`,
+        });
+      }
+
+      await Unit.delete(id);
+
+      res.json({
+        success: true,
+        message: "Unit deleted successfully",
+      });
+    } catch (error) {
+      console.error("Delete unit error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error deleting unit",
+        error: error.message,
+      });
+    }
+  }
 }
 
 export default UnitController;

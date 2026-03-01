@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { userAPI, unitAPI } from "../../lib/api";
 import ShiftDashboard from "./ShiftDashboard";
+import UnitsManagement from "./UnitsManagement";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -162,6 +163,10 @@ const AdminDashboard = () => {
     return <ShiftDashboard onBack={() => setCurrentView("admin")} />;
   }
 
+  if (currentView === "units") {
+    return <UnitsManagement onBack={() => setCurrentView("admin")} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
@@ -179,6 +184,13 @@ const AdminDashboard = () => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentView("units")}
+              >
+                Manage Units
+              </Button>
               <Button
                 variant="outline"
                 size="sm"

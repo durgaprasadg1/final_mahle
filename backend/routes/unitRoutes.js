@@ -10,5 +10,6 @@ router.get("/", UnitController.getAllUnits);
 router.get("/:id", UnitController.getUnitById);
 router.post("/", authorizeAdmin, UnitController.createUnit);
 router.put("/:id", authorizeAdmin, UnitController.updateUnit);
+router.delete("/:id", authorizeAdmin, UnitController.deleteUnit);
 
 export default router;

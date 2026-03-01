@@ -75,6 +75,7 @@ export const unitAPI = {
   getById: (id) => api.get(`/units/${id}`),
   create: (unitData) => api.post("/units", unitData),
   update: (id, unitData) => api.put(`/units/${id}`, unitData),
+  delete: (id) => api.delete(`/units/${id}`),
 };
 
 // Product API

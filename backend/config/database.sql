@@ -232,7 +232,6 @@ CREATE TRIGGER update_tier_templates_updated_at BEFORE UPDATE ON tier_templates
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 
--- Get next batch sequence number for a specific product, shift, and date
 CREATE OR REPLACE FUNCTION get_next_batch_in_shift(
     p_product_id INTEGER,
     p_shift shift_type,
@@ -252,7 +251,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Get total production for a shift
+-- Ek shift ka saara production data dega
 CREATE OR REPLACE FUNCTION get_shift_production(
     p_unit_id INTEGER,
     p_shift shift_type,
@@ -276,7 +275,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to get daily production summary
+-- Roz ki Production summary dene ke liye function, shift-wise breakdown ke saath
 CREATE OR REPLACE FUNCTION get_daily_production_summary(
     p_unit_id INTEGER,
     p_date DATE DEFAULT CURRENT_DATE
@@ -306,7 +305,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Function to get all batches for a specific shift on a specific date
+-- specific shift ke liye batches laane ke liye 
 CREATE OR REPLACE FUNCTION get_batches_by_shift(
     p_unit_id INTEGER,
     p_shift shift_type,

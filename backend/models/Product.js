@@ -2,7 +2,6 @@ import pool from "../config/database.js";
 import ProductComponent from "./ProductComponent.js";
 
 class Product {
-  // Create a new product with components
   static async create(productData) {
     const {
       name,
@@ -12,20 +11,17 @@ class Product {
       specifications,
       created_by,
       tier_id,
-      // Hierarchy info from templates (passed from controller)
       tierName,
       tierDescription,
       cellName,
       cellDescription,
       fractileName,
       fractileDescription,
-      // Legacy array-based approach
       fractiles,
       cells,
       tiers,
     } = productData;
 
-    // Start transaction
     const client = await pool.connect();
     
     try {
@@ -52,7 +48,6 @@ class Product {
       const productResult = await client.query(productQuery, productValues);
       const product = productResult.rows[0];
 
-      // If tier_id and hierarchy info is provided (from templates)
       if (tier_id && tierName) {
         // Insert tier
         const insertedTierResult = await client.query(
@@ -63,8 +58,8 @@ class Product {
         );
         const insertedTier = insertedTierResult.rows[0];
 
-        // Insert cell linked to tier
-        const insertedCellResult = await client.query(
+        // Cell  - Tier linking
+         const insertedCellResult = await client.query(
           `INSERT INTO product_cells (product_id, tier_id, name, count, description)
            VALUES ($1, $2, $3, $4, $5)
            RETURNING *`,
@@ -72,7 +67,7 @@ class Product {
         );
         const insertedCell = insertedCellResult.rows[0];
 
-        // Insert fractile linked to cell
+        // fractile - Cell linking
         await client.query(
           `INSERT INTO product_fractiles (product_id, cell_id, name, count, description)
            VALUES ($1, $2, $3, $4, $5)`,
@@ -195,14 +190,15 @@ class Product {
     query += ` ORDER BY p.created_at DESC`;
 
     const result = await pool.query(query, values);
-    // Parse specifications for each product when possible
+
+    //hrr ek product ke liye specifications ko parse karne ko try  karte hain, agar wo stringified JSON hai to usko JSON mein convert kar denge
     result.rows.forEach((p) => {
       if (p && p.specifications && typeof p.specifications === "string") {
         try {
           p.specifications = JSON.parse(p.specifications);
         } catch (e) {
-          // leave as string
-        }
+          // chhodd diye jaa jee le apni jindagi  
+     }
       }
     });
 
