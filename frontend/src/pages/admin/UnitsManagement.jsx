@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { unitAPI } from "../../lib/api";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
@@ -11,14 +11,6 @@ import {
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -38,6 +30,7 @@ import {
   Users,
   Package,
 } from "lucide-react";
+import { DataTable } from "../../components/user/table";
 
 const UnitsManagement = ({ onBack }) => {
   const [units, setUnits] = useState([]);
@@ -175,6 +168,83 @@ const UnitsManagement = ({ onBack }) => {
     resetForm();
   };
 
+  const unitColumns = useMemo(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: ({ getValue }) => <div className="font-medium">{getValue()}</div>,
+      },
+      {
+        accessorKey: "code",
+        header: "Code",
+        cell: ({ getValue }) => <Badge variant="secondary">{getValue()}</Badge>,
+      },
+      {
+        accessorKey: "location",
+        header: "Location",
+        cell: ({ getValue }) =>
+          getValue() || (
+            <span className="text-gray-400 italic">Not specified</span>
+          ),
+      },
+      {
+        id: "users",
+        header: "Users",
+        cell: ({ row }) => (
+          <div className="flex items-center justify-center gap-1">
+            <Users className="w-4 h-4 text-gray-400" />
+            <span>{row.original.user_count || 0}</span>
+          </div>
+        ),
+      },
+      {
+        id: "products",
+        header: "Products",
+        cell: ({ row }) => (
+          <div className="flex items-center justify-center gap-1">
+            <Package className="w-4 h-4 text-gray-400" />
+            <span>{row.original.product_count || 0}</span>
+          </div>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => {
+          const unit = row.original;
+          return (
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => openDetailsModal(unit)}
+              >
+                <Eye className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => openEditModal(unit)}
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteUnit(unit)}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [],
+  );
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white shadow-sm border-b">
@@ -229,77 +299,7 @@ const UnitsManagement = ({ onBack }) => {
                 </Button>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Location</TableHead>
-                      <TableHead className="text-center">Users</TableHead>
-                      <TableHead className="text-center">Products</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {units.map((unit) => (
-                      <TableRow key={unit.id}>
-                        <TableCell className="font-medium">
-                          {unit.name}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="secondary">{unit.code}</Badge>
-                        </TableCell>
-                        <TableCell>
-                          {unit.location || (
-                            <span className="text-gray-400 italic">
-                              Not specified
-                            </span>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <Users className="w-4 h-4 text-gray-400" />
-                            <span>{unit.user_count || 0}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <div className="flex items-center justify-center gap-1">
-                            <Package className="w-4 h-4 text-gray-400" />
-                            <span>{unit.product_count || 0}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openDetailsModal(unit)}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => openEditModal(unit)}
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteUnit(unit)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable columns={unitColumns} data={units} />
             )}
           </CardContent>
         </Card>

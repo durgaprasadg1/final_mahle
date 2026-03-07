@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Card,
   CardHeader,
@@ -7,20 +7,13 @@ import {
   CardDescription,
 } from "../ui/card";
 import { Button } from "../ui/button";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "../ui/table";
 import { Badge } from "../ui/badge";
 import { Plus, Edit, Trash2 } from "lucide-react";
 import { formatDateOnly, formatProductType } from "../../lib/utils";
 import { getCreatorName } from "../../utils/batchUtils";
 import { ProductModal } from "./ProductModal";
 import { Link } from "react-router-dom";
+import { DataTable } from "./table";
 
 /**
  * Product filters component
@@ -230,6 +223,122 @@ export const ProductsTab = ({
     }
   };
 
+  const columns = useMemo(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: ({ getValue }) => <div className="font-medium">{getValue()}</div>,
+      },
+      {
+        accessorKey: "type",
+        header: "Type",
+        cell: ({ getValue }) => (
+          <Badge variant="outline">{formatProductType(getValue())}</Badge>
+        ),
+      },
+      {
+        id: "components",
+        header: "Components",
+        cell: ({ row }) => {
+          const product = row.original;
+          const fractiles = Array.isArray(product.fractiles)
+            ? product.fractiles
+            : [];
+          const cells = Array.isArray(product.cells) ? product.cells : [];
+          const tiers = Array.isArray(product.tiers) ? product.tiers : [];
+          const totalComponents =
+            fractiles.length + cells.length + tiers.length;
+
+          return totalComponents > 0 ? (
+            <div className="space-y-1">
+              {fractiles.length > 0 && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-xs font-semibold text-blue-600">
+                    Fractiles:
+                  </span>
+                  {fractiles.map((f, idx) => (
+                    <Badge key={idx} variant="secondary" className="text-xs">
+                      {f.name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {cells.length > 0 && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-xs font-semibold text-green-600">
+                    Cells:
+                  </span>
+                  {cells.map((c, idx) => (
+                    <Badge key={idx} variant="secondary" className="text-xs">
+                      {c.name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+              {tiers.length > 0 && (
+                <div className="flex items-center gap-1 flex-wrap">
+                  <span className="text-xs font-semibold text-purple-600">
+                    Tiers:
+                  </span>
+                  {tiers.map((t, idx) => (
+                    <Badge key={idx} variant="secondary" className="text-xs">
+                      {t.name}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+            </div>
+          ) : (
+            <span className="text-gray-400">No components</span>
+          );
+        },
+      },
+      {
+        id: "created_by",
+        header: "Created By",
+        cell: ({ row }) => {
+          const product = row.original;
+          return (
+            <div>
+              <div className="text-sm">{getCreatorName(product, user)}</div>
+              <div className="text-xs text-gray-400">
+                {formatDateOnly(product.created_at)}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => (
+          <div className="flex justify-end space-x-2">
+            {user?.permissions?.update && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleEditProduct(row.original)}
+              >
+                <Edit className="w-4 h-4 text-blue-600" />
+              </Button>
+            )}
+            {user?.permissions?.delete && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onDeleteProduct(row.original.id)}
+              >
+                <Trash2 className="w-4 h-4 text-red-600" />
+              </Button>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [user, onDeleteProduct],
+  );
+
   return (
     <>
       <Card>
@@ -282,131 +391,7 @@ export const ProductsTab = ({
                 : "No products found. Add a product to get started."}
             </div>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Components</TableHead>
-                  <TableHead>Created By</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredProducts.map((product) => {
-                  const fractiles = Array.isArray(product.fractiles)
-                    ? product.fractiles
-                    : [];
-                  const cells = Array.isArray(product.cells)
-                    ? product.cells
-                    : [];
-                  const tiers = Array.isArray(product.tiers)
-                    ? product.tiers
-                    : [];
-                  const totalComponents =
-                    fractiles.length + cells.length + tiers.length;
-
-                  return (
-                    <TableRow key={product.id}>
-                      <TableCell className="font-medium">
-                        {product.name}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {formatProductType(product.type)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {totalComponents > 0 ? (
-                          <div className="space-y-1">
-                            {fractiles.length > 0 && (
-                              <div className="flex items-center gap-1 flex-wrap">
-                                <span className="text-xs font-semibold text-blue-600">
-                                  Fractiles:
-                                </span>
-                                {fractiles.map((f, idx) => (
-                                  <Badge
-                                    key={idx}
-                                    variant="secondary"
-                                    className="text-xs"
-                                  >
-                                    {f.name}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                            {cells.length > 0 && (
-                              <div className="flex items-center gap-1 flex-wrap">
-                                <span className="text-xs font-semibold text-green-600">
-                                  Cells:
-                                </span>
-                                {cells.map((c, idx) => (
-                                  <Badge
-                                    key={idx}
-                                    variant="secondary"
-                                    className="text-xs"
-                                  >
-                                    {c.name}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                            {tiers.length > 0 && (
-                              <div className="flex items-center gap-1 flex-wrap">
-                                <span className="text-xs font-semibold text-purple-600">
-                                  Tiers:
-                                </span>
-                                {tiers.map((t, idx) => (
-                                  <Badge
-                                    key={idx}
-                                    variant="secondary"
-                                    className="text-xs"
-                                  >
-                                    {t.name}
-                                  </Badge>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                        ) : (
-                          <span className="text-gray-400">No components</span>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {getCreatorName(product, user)}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          {formatDateOnly(product.created_at)}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end space-x-2">
-                          {user?.permissions?.update && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleEditProduct(product)}
-                            >
-                              <Edit className="w-4 h-4 text-blue-600" />
-                            </Button>
-                          )}
-                          {user?.permissions?.delete && (
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => onDeleteProduct(product.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-red-600" />
-                            </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
+            <DataTable columns={columns} data={filteredProducts} />
           )}
         </CardContent>
       </Card>

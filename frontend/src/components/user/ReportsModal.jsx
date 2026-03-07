@@ -1,19 +1,12 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select } from "../ui/select";
 import { Card, CardHeader, CardContent, CardTitle } from "../ui/card";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "../ui/table";
 import { formatDateOnly } from "../../lib/utils";
+import { DataTable } from "./table";
 
 /**
  * Reports Modal Component
@@ -37,6 +30,37 @@ export const ReportsModal = ({
   const handleClose = () => {
     onClose();
   };
+
+  const columns = useMemo(
+    () => [
+      {
+        accessorKey: "created_at",
+        header: "Date",
+        cell: ({ getValue }) => formatDateOnly(getValue()),
+      },
+      {
+        accessorKey: "shift",
+        header: "Shift",
+        cell: ({ getValue }) => <div className="capitalize">{getValue()}</div>,
+      },
+      {
+        accessorKey: "product_name",
+        header: "Product",
+        cell: ({ getValue }) => <div className="font-medium">{getValue()}</div>,
+      },
+      {
+        accessorKey: "quantity_produced",
+        header: "Quantity",
+        cell: ({ getValue }) => getValue(),
+      },
+      {
+        accessorKey: "created_by_name",
+        header: "Worker",
+        cell: ({ getValue }) => <div className="text-xs">{getValue()}</div>,
+      },
+    ],
+    [],
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -155,33 +179,11 @@ export const ReportsModal = ({
                 </Card>
               </div>
 
-              <div className="border rounded-md">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Shift</TableHead>
-                      <TableHead>Product</TableHead>
-                      <TableHead>Quantity</TableHead>
-                      <TableHead>Worker</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reportResults.slice(0, 50).map((b) => (
-                      <TableRow key={b.id}>
-                        <TableCell>{formatDateOnly(b.created_at)}</TableCell>
-                        <TableCell className="capitalize">{b.shift}</TableCell>
-                        <TableCell className="font-medium">
-                          {b.product_name}
-                        </TableCell>
-                        <TableCell>{b.quantity_produced}</TableCell>
-                        <TableCell className="text-xs">
-                          {b.created_by_name}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+              <div>
+                <DataTable
+                  columns={columns}
+                  data={reportResults.slice(0, 50)}
+                />
                 {reportResults.length > 50 && (
                   <div className="p-4 text-center text-sm text-gray-500 italic">
                     Showing first 50 results. Download full CSV for all data.

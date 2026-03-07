@@ -2,6 +2,103 @@ import Batch from "../models/Batch.js";
 import Product from "../models/Product.js";
 
 class BatchController {
+  static async createBatchesBulk(req, res) {
+    try {
+      const { batches } = req.body;
+  
+      if (!batches || !Array.isArray(batches) || batches.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Batches array is required and cannot be empty",
+        });
+      }
+  
+      // Validate all batches
+      const errors = [];
+      const validBatches = [];
+  
+      for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        
+        if (!batch.product_id || !batch.quantity_produced || !batch.shift || 
+            !batch.start_time || !batch.end_time) {
+          errors.push(`Batch ${i + 1}: Missing required fields`);
+          continue;
+        }
+  
+        const validShifts = ["morning", "afternoon", "night"];
+        if (!validShifts.includes(batch.shift)) {
+          errors.push(`Batch ${i + 1}: Invalid shift`);
+          continue;
+        }
+  
+        // Verify product exists
+        const product = await Product.findById(batch.product_id);
+        if (!product) {
+          errors.push(`Batch ${i + 1}: Product not found`);
+          continue;
+        }
+  
+        // Check access
+        if (req.user.role !== "admin" && product.unit_id !== req.user.unit_id) {
+          errors.push(`Batch ${i + 1}: Access denied`);
+          continue;
+        }
+  
+        const queryDate = batch.batch_date || new Date().toISOString().split("T")[0];
+        
+        let finalBatchInShift = batch.batch_in_shift;
+        if (!finalBatchInShift) {
+          finalBatchInShift = await Batch.getNextBatchInShift(
+            batch.product_id,
+            batch.shift,
+            queryDate
+          );
+        }
+  
+        validBatches.push({
+          product_id: batch.product_id,
+          unit_id: product.unit_id,
+          quantity_produced: batch.quantity_produced,
+          shift: batch.shift,
+          batch_in_shift: finalBatchInShift,
+          batch_date: queryDate,
+          start_time: batch.start_time,
+          end_time: batch.end_time,
+          status: batch.status || "completed",
+          notes: batch.notes,
+          had_delay: batch.had_delay || "no",
+          delay_reason: batch.delay_reason || null,
+          created_by: req.user.id,
+        });
+      }
+  
+      if (validBatches.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: "No valid batches to create",
+          errors,
+        });
+      }
+  
+      // Create all batches in one query
+      const createdBatches = await Batch.createBulk(validBatches);
+  
+      res.status(201).json({
+        success: true,
+        message: `${createdBatches.length} batch(es) created successfully`,
+        data: createdBatches,
+        errors: errors.length > 0 ? errors : undefined,
+      });
+    } catch (error) {
+      console.error("Bulk create batches error:", error);
+      res.status(500).json({
+        success: false,
+        message: "Error creating batches",
+        error: error.message,
+      });
+    }
+  }
   static async createBatch(req, res) {
     try {
       const {

@@ -1,6 +1,69 @@
 import pool from "../config/database.js";
 
 class Batch {
+  static async createBulk(batchesData) {
+    if (!batchesData || batchesData.length === 0) {
+      return [];
+    }
+    const placeholders = [];
+    const values = [];
+    let paramCount = 1;
+  
+    batchesData.forEach((batch, index) => {
+      const {
+        product_id,
+        unit_id,
+        quantity_produced,
+        shift,
+        batch_in_shift,
+        batch_date,
+        start_time,
+        end_time,
+        status,
+        notes,
+        had_delay,
+        delay_reason,
+        created_by,
+      } = batch;
+  
+      //($1, $2, $3, ..., $13) ye placeholder rhte
+      const rowPlaceholders = [];
+      for (let i = 0; i < 13; i++) {
+        rowPlaceholders.push(`$${paramCount++}`);
+      }
+      placeholders.push(`(${rowPlaceholders.join(", ")})`);
+  
+      // Add values in same order
+      values.push(
+        product_id,
+        unit_id,
+        quantity_produced,
+        shift,
+        batch_in_shift,
+        batch_date || new Date().toISOString().split("T")[0],
+        start_time,
+        end_time,
+        status || "completed",
+        notes || null,
+        had_delay || "no",
+        delay_reason || null,
+        created_by
+      );
+    });
+  
+    const query = `
+      INSERT INTO batches (
+        product_id, unit_id, quantity_produced, shift, batch_in_shift,
+        batch_date, start_time, end_time, status, notes,
+        had_delay, delay_reason, created_by
+      )
+      VALUES ${placeholders.join(", ")}
+      RETURNING *
+    `;
+  
+    const result = await pool.query(query, values);
+    return result.rows;
+  }
   static async create(batchData) {
     const {
       product_id,

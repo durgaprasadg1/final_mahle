@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../../contexts/AuthContext";
 import { userAPI, unitAPI } from "../../lib/api";
 import ShiftDashboard from "./ShiftDashboard";
@@ -14,14 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -43,6 +35,7 @@ import {
   Eye,
 } from "lucide-react";
 import { formatDate, formatDateOnly } from "../../lib/utils";
+import { DataTable } from "../../components/user/table";
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
@@ -158,6 +151,82 @@ const AdminDashboard = () => {
     logout();
     toast.info("Logged out successfully");
   };
+
+  const userColumns = useMemo(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: ({ getValue }) => <div className="font-medium">{getValue()}</div>,
+      },
+      {
+        accessorKey: "email",
+        header: "Email",
+        cell: ({ getValue }) => getValue(),
+      },
+      {
+        id: "unit",
+        header: "Unit",
+        cell: ({ row }) => (
+          <Badge variant="outline">{row.original.unit_code || "N/A"}</Badge>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ getValue }) => (
+          <Badge variant={getValue() === "active" ? "success" : "destructive"}>
+            {getValue()}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "created_at",
+        header: "Created",
+        cell: ({ getValue }) => formatDateOnly(getValue()),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => {
+          const user = row.original;
+          return (
+            <div className="flex justify-end space-x-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setSelectedUser(user);
+                  setShowDetailsModal(true);
+                }}
+              >
+                <Eye className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleToggleStatus(user.id, user.status)}
+              >
+                {user.status === "active" ? (
+                  <UserX className="w-4 h-4 text-orange-600" />
+                ) : (
+                  <UserCheck className="w-4 h-4 text-green-600" />
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleDeleteUser(user.id)}
+              >
+                <Trash2 className="w-4 h-4 text-red-600" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [],
+  );
 
   if (currentView === "shift") {
     return <ShiftDashboard onBack={() => setCurrentView("admin")} />;
@@ -278,81 +347,10 @@ const AdminDashboard = () => {
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Name</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Unit</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {users
-                    .filter((u) => u.role === "user")
-                    .map((user) => (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">
-                          {user.name}
-                        </TableCell>
-                        <TableCell>{user.email}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {user.unit_code || "N/A"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              user.status === "active"
-                                ? "success"
-                                : "destructive"
-                            }
-                          >
-                            {user.status}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{formatDateOnly(user.created_at)}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end space-x-2">
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => {
-                                setSelectedUser(user);
-                                setShowDetailsModal(true);
-                              }}
-                            >
-                              <Eye className="w-4 h-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() =>
-                                handleToggleStatus(user.id, user.status)
-                              }
-                            >
-                              {user.status === "active" ? (
-                                <UserX className="w-4 h-4 text-orange-600" />
-                              ) : (
-                                <UserCheck className="w-4 h-4 text-green-600" />
-                              )}
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteUser(user.id)}
-                            >
-                              <Trash2 className="w-4 h-4 text-red-600" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                </TableBody>
-              </Table>
+              <DataTable
+                columns={userColumns}
+                data={users.filter((u) => u.role === "user")}
+              />
             )}
           </CardContent>
         </Card>

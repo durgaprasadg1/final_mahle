@@ -168,7 +168,6 @@ export const BatchModal = ({
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validations
     if (!batchForm.product_id) {
       toast.error("Please select a product for the batch");
       return;

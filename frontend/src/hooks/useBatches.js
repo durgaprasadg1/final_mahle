@@ -27,25 +27,86 @@ export const useBatches = () => {
     }
   };
 
-  // Create multiple batches (one for each time slot)
+  
+  // const createBatches = async (batchFormData, selectedSlots) => {
+  //   const toTimeString = (timeValue) => {
+  //     if (!timeValue) return null;
+  //     return timeValue.length === 5 ? `${timeValue}:00` : timeValue;
+  //   };
+
+  //   let createdCount = 0;
+  //   const errors = [];
+
+    // -----------  Ye Multiple Insert Kaa Logic
+
+  //   // for (const slotValue of selectedSlots) {
+  //   //   const [startTime, endTime] = slotValue.split("|");
+
+  //   //   if (!startTime || !endTime) {
+  //   //     errors.push(`Invalid time slot: ${slotValue}`);
+  //   //     continue;
+  //   //   }
+
+  //   //   const payload = {
+  //   //     product_id: parseInt(batchFormData.product_id, 10),
+  //   //     quantity_produced: parseInt(batchFormData.quantity_produced, 10),
+  //   //     start_time: toTimeString(startTime),
+  //   //     end_time: toTimeString(endTime),
+  //   //     shift: batchFormData.shift || "morning",
+  //   //     notes: batchFormData.notes,
+  //   //     had_delay: batchFormData.had_delay,
+  //   //     delay_reason:
+  //   //       batchFormData.had_delay === "yes" ? batchFormData.delay_reason : "",
+  //   //   };
+
+  //   //   try {
+  //   //     await batchAPI.create(payload);
+  //   //     createdCount++;
+  //   //   } catch (err) {
+  //   //     errors.push(
+  //   //       `Failed to create batch for ${startTime}-${endTime}: ${
+  //   //         err.response?.data?.message || err.message
+  //   //       }`,
+  //   //     );
+  //   //   }
+  //   // }
+
+
+  //   // Show results
+  //   if (createdCount > 0) {
+  //     toast.success(
+  //       `${createdCount} batch(es) created successfully${
+  //         errors.length > 0 ? ` (${errors.length} failed)` : ""
+  //       }`,
+  //     );
+  //     await fetchBatches();
+  //   }
+
+  //   if (errors.length > 0) {
+  //     console.error("Batch creation errors:", errors);
+  //     if (createdCount === 0) {
+  //       toast.error(
+  //         `Failed to create batches: ${errors[0]}${
+  //           errors.length > 1 ? ` (and ${errors.length - 1} more)` : ""
+  //         }`,
+  //       );
+  //     }
+  //   }
+
+  //   return { createdCount, errors };
+  // };
+
+
   const createBatches = async (batchFormData, selectedSlots) => {
     const toTimeString = (timeValue) => {
       if (!timeValue) return null;
       return timeValue.length === 5 ? `${timeValue}:00` : timeValue;
     };
-
-    let createdCount = 0;
-    const errors = [];
-
-    for (const slotValue of selectedSlots) {
+  
+    const batches = selectedSlots.map((slotValue) => {
       const [startTime, endTime] = slotValue.split("|");
-
-      if (!startTime || !endTime) {
-        errors.push(`Invalid time slot: ${slotValue}`);
-        continue;
-      }
-
-      const payload = {
+      
+      return {
         product_id: parseInt(batchFormData.product_id, 10),
         quantity_produced: parseInt(batchFormData.quantity_produced, 10),
         start_time: toTimeString(startTime),
@@ -53,46 +114,29 @@ export const useBatches = () => {
         shift: batchFormData.shift || "morning",
         notes: batchFormData.notes,
         had_delay: batchFormData.had_delay,
-        delay_reason:
-          batchFormData.had_delay === "yes" ? batchFormData.delay_reason : "",
+        delay_reason: batchFormData.had_delay === "yes" ? batchFormData.delay_reason : "",
       };
-
-      try {
-        await batchAPI.create(payload);
-        createdCount++;
-      } catch (err) {
-        errors.push(
-          `Failed to create batch for ${startTime}-${endTime}: ${
-            err.response?.data?.message || err.message
-          }`,
-        );
+    });
+  
+    try {
+      const response = await batchAPI.createBulk(batches);
+      
+      toast.success(response.data.message);
+      if (response.data.errors?.length > 0) {
+        console.warn("Some batches failed:", response.data.errors);
       }
-    }
-
-    // Show results
-    if (createdCount > 0) {
-      toast.success(
-        `${createdCount} batch(es) created successfully${
-          errors.length > 0 ? ` (${errors.length} failed)` : ""
-        }`,
-      );
+      
       await fetchBatches();
+      return { 
+        createdCount: response.data.data.length, 
+        errors: response.data.errors || [] 
+      };
+    } catch (error) {
+      const errorMsg = error.response?.data?.message || "Failed to create batches";
+      toast.error(errorMsg);
+      return { createdCount: 0, errors: [errorMsg] };
     }
-
-    if (errors.length > 0) {
-      console.error("Batch creation errors:", errors);
-      if (createdCount === 0) {
-        toast.error(
-          `Failed to create batches: ${errors[0]}${
-            errors.length > 1 ? ` (and ${errors.length - 1} more)` : ""
-          }`,
-        );
-      }
-    }
-
-    return { createdCount, errors };
   };
-
   // Delete batch
   const deleteBatch = async (batchId) => {
     if (!window.confirm("Are you sure you want to delete this batch?"))

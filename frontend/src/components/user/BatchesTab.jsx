@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useMemo } from "react";
 import {
   Card,
   CardHeader,
@@ -7,20 +7,13 @@ import {
   CardDescription,
 } from "../ui/card";
 import { Button } from "../ui/button";
-import {
-  Table,
-  TableHeader,
-  TableRow,
-  TableHead,
-  TableBody,
-  TableCell,
-} from "../ui/table";
 import { Badge } from "../ui/badge";
-import { Plus, Edit, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { formatDateOnly } from "../../lib/utils";
 import { getCreatorName } from "../../utils/batchUtils";
 import { BatchModal } from "./BatchModal";
+import { DataTable } from "./table";
 
 /**
  * Batches Tab Component
@@ -36,11 +29,112 @@ export const BatchesTab = ({
   const [delayDialogBatch, setDelayDialogBatch] = useState(null);
 
   const handleBatchSubmit = async (batchFormData, selectedSlots) => {
+    // Yha pe apne ko  batch createHone ke phle batches timing kaa array bnana hai
     const result = await onCreateBatches(batchFormData, selectedSlots);
     if (result.createdCount > 0) {
       setShowBatchModal(false);
     }
   };
+
+  const columns = useMemo(
+    () => [
+      {
+        accessorKey: "product_name",
+        header: "Product",
+        cell: ({ getValue }) => <div>{getValue()}</div>,
+      },
+      {
+        accessorKey: "product_type",
+        header: "Product Type",
+        cell: ({ getValue }) => (
+          <div className="capitalize">
+            {getValue()?.replace(/_/g, " ") || "-"}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "quantity_produced",
+        header: "Quantity",
+        cell: ({ getValue }) => (
+          <div className="font-semibold">{getValue()}</div>
+        ),
+      },
+      {
+        id: "slot",
+        header: "Slot",
+        cell: ({ row }) => (
+          <div className="text-sm">
+            {row.original.start_time} - {row.original.end_time}
+          </div>
+        ),
+      },
+      {
+        accessorKey: "shift",
+        header: "Shift",
+        cell: ({ getValue }) => <div className="capitalize">{getValue()}</div>,
+      },
+      {
+        id: "delay",
+        header: "Delay",
+        cell: ({ row }) => {
+          const batch = row.original;
+          return batch.had_delay === "yes" ? (
+            <div className="flex items-center gap-2">
+              <Badge variant="destructive">Yes</Badge>
+              {batch.delay_reason && (
+                <button
+                  onClick={() => setDelayDialogBatch(batch)}
+                  className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
+                >
+                  View Reason
+                </button>
+              )}
+            </div>
+          ) : (
+            <Badge variant="secondary">No</Badge>
+          );
+        },
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ getValue }) => <Badge variant="success">{getValue()}</Badge>,
+      },
+      {
+        id: "filled_by",
+        header: "Filled By",
+        cell: ({ row }) => {
+          const batch = row.original;
+          return (
+            <div>
+              <div className="text-sm">{getCreatorName(batch, user)}</div>
+              <div className="text-xs text-gray-400">
+                {formatDateOnly(batch.created_at)}
+              </div>
+            </div>
+          );
+        },
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => (
+          <div className="flex justify-end space-x-2">
+            {user?.permissions?.delete && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => onDeleteBatch(row.original.id)}
+              >
+                <Trash2 className="w-4 h-4 text-red-600" />
+              </Button>
+            )}
+          </div>
+        ),
+      },
+    ],
+    [user, onDeleteBatch],
+  );
 
   return (
     <>
@@ -62,77 +156,7 @@ export const BatchesTab = ({
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Product Type</TableHead>
-                <TableHead>Quantity</TableHead>
-                <TableHead>Slot</TableHead>
-                <TableHead>Shift</TableHead>
-                <TableHead>Delay</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Filled By</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {batches.map((batch) => (
-                <TableRow key={batch.id}>
-                  <TableCell>{batch.product_name}</TableCell>
-                  <TableCell className="capitalize">
-                    {batch.product_type?.replace(/_/g, " ") || "-"}
-                  </TableCell>
-                  <TableCell className="font-semibold">
-                    {batch.quantity_produced}
-                  </TableCell>
-                  <TableCell className="text-sm">
-                    {batch.start_time} - {batch.end_time}
-                  </TableCell>
-                  <TableCell className="capitalize">{batch.shift}</TableCell>
-                  <TableCell>
-                    {batch.had_delay === "yes" ? (
-                      <div className="flex items-center gap-2">
-                        <Badge variant="destructive">Yes</Badge>
-                        {batch.delay_reason && (
-                          <button
-                            onClick={() => setDelayDialogBatch(batch)}
-                            className="text-xs text-blue-600 hover:text-blue-800 hover:underline font-medium"
-                          >
-                            View Reason
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      <Badge variant="secondary">No</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="success">{batch.status}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="text-sm">{getCreatorName(batch, user)}</div>
-                    <div className="text-xs text-gray-400">
-                      {formatDateOnly(batch.created_at)}
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end space-x-2">
-                      {user?.permissions?.delete && (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() => onDeleteBatch(batch.id)}
-                        >
-                          <Trash2 className="w-4 h-4 text-red-600" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <DataTable columns={columns} data={batches} />
         </CardContent>
       </Card>
 

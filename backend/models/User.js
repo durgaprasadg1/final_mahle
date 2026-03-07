@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import pool from "../config/database.js";
 
 class User {
@@ -95,20 +96,26 @@ class User {
   }
 
   // Find user by email
-  static async findByEmail(email) {
+  static async findByEmail(email, password) {
     const query = `
       SELECT u.*, units.name as unit_name, units.code as unit_code
       FROM users u
       LEFT JOIN units ON u.unit_id = units.id
-      WHERE u.email = $1
+      WHERE u.email = $1 AND u.status != 'blocked' 
     `;
     const result = await pool.query(query, [email]);
     
     if (!result.rows.length) {
       return null;
     }
+    
 
     const user = result.rows[0];
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        return null;
+      }
+
     // Convert permissions to object for API response
     user.permissions = this.permissionsToObject(user.permissions);
     

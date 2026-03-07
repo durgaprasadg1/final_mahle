@@ -110,6 +110,7 @@ export const templateAPI = {
 // Batch API
 export const batchAPI = {
   create: (batchData) => api.post("/batches", batchData),
+  createBulk: (batches) => api.post("/batches/bulk", { batches }),
   getAll: (params) => api.get("/batches", { params }),
   getById: (id) => api.get(`/batches/${id}`),
   update: (id, batchData) => api.put(`/batches/${id}`, batchData),
