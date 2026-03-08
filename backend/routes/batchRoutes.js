@@ -18,9 +18,13 @@ router.get(
 );
 
 router.get("/:id", BatchController.getBatchById);
-router.post("/", checkPermission("create"), BatchController.createBatch);
-router.post("/bulk", checkPermission("create"), BatchController.createBatchesBulk);
-router.put("/:id", checkPermission("update"), BatchController.updateBatch);
-router.delete("/:id", checkPermission("delete"), BatchController.deleteBatch);
+router.post("/", checkPermission("create", "cells"), BatchController.createBatch);
+router.post(
+  "/bulk",
+  checkPermission("create", "cells"),
+  BatchController.createBatchesBulk,
+);
+router.put("/:id", checkPermission("update", "cells"), BatchController.updateBatch);
+router.delete("/:id", checkPermission("delete", "cells"), BatchController.deleteBatch);
 
 export default router;
