@@ -15,10 +15,17 @@ import { getCreatorName } from "../../utils/batchUtils";
 import { BatchModal } from "./BatchModal";
 import { DataTable } from "./table";
 
-const canAccess = (permissions, operation, resource = "cells") => {
+const canAccess = (permissions, operation, resource = "batch") => {
   const scoped = permissions?.resources?.[resource]?.[operation];
   if (typeof scoped === "boolean") {
     return scoped;
+  }
+  // Backward compatibility for older users where batch rights were stored under cells.
+  if (resource === "batch") {
+    const legacyScoped = permissions?.resources?.cells?.[operation];
+    if (typeof legacyScoped === "boolean") {
+      return legacyScoped;
+    }
   }
   return Boolean(permissions?.[operation]);
 };

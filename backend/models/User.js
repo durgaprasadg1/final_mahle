@@ -1,10 +1,9 @@
-import bcrypt from "bcryptjs";
 import pool from "../config/database.js";
 
 class User {
   static CRUD_OPERATIONS = ["create", "read", "update", "delete"];
 
-  static RESOURCE_KEYS = ["product", "fracticl", "tier", "cells"];
+  static RESOURCE_KEYS = ["product", "fracticl", "tier", "cells", "batch"];
 
   static RESOURCE_ALIASES = {
     product: "product",
@@ -16,8 +15,8 @@ class User {
     tiers: "tier",
     cell: "cells",
     cells: "cells",
-    batch: "cells",
-    batches: "cells",
+    batch: "batch",
+    batches: "batch",
   };
 
   static normalizeResourceKey(resource) {
@@ -55,8 +54,19 @@ class User {
 
   static buildResources(resourceInput = {}, fallbackCrud = null) {
     const resources = {};
+    const normalizedResourceInput = {};
+
+    Object.entries(resourceInput || {}).forEach(([resourceKey, value]) => {
+      const normalizedKey = this.normalizeResourceKey(resourceKey);
+      if (!normalizedKey || typeof value !== "object" || value === null) {
+        return;
+      }
+      normalizedResourceInput[normalizedKey] = value;
+    });
+
     this.RESOURCE_KEYS.forEach((resourceKey) => {
-      const explicit = resourceInput[resourceKey] || resourceInput[resourceKey[0]];
+      const explicit =
+        normalizedResourceInput[resourceKey] || resourceInput[resourceKey[0]];
       resources[resourceKey] = explicit
         ? this.buildCrudObject(explicit)
         : this.buildCrudObject(fallbackCrud || {});
@@ -212,31 +222,43 @@ class User {
     return user;
   }
 
-  // Find user by email
-  static async findByEmail(email, password) {
+  // Find user by email for authentication
+  static async findByEmail(email) {
     const query = `
       SELECT u.*, units.name as unit_name, units.code as unit_code
       FROM users u
       LEFT JOIN units ON u.unit_id = units.id
       WHERE u.email = $1 AND u.status != 'blocked' 
+      LIMIT 1
     `;
     const result = await pool.query(query, [email]);
-    
+
     if (!result.rows.length) {
       return null;
     }
-    
 
     const user = result.rows[0];
-    const isPasswordValid = await bcrypt.compare(password, user.password);
-      if (!isPasswordValid) {
-        return null;
-      }
 
     // Convert permissions to object for API response
     user.permissions = this.permissionsToObject(user.permissions);
-    
+
     return user;
+  }
+
+  // Lightweight existence check used by create/update flows
+  static async emailExists(email, excludeUserId = null) {
+    const values = [email];
+    let query = "SELECT 1 FROM users WHERE email = $1";
+
+    if (excludeUserId) {
+      values.push(excludeUserId);
+      query += " AND id != $2";
+    }
+
+    query += " LIMIT 1";
+
+    const result = await pool.query(query, values);
+    return result.rows.length > 0;
   }
 
   // Find user by ID

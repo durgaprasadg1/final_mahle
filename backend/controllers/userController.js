@@ -21,7 +21,7 @@ class UserController {
         });
       }
 
-      const existingUser = await User.findByEmail(email);
+      const existingUser = await User.emailExists(email);
       if (existingUser) {
         return res.status(409).json({
           success: false,
@@ -58,10 +58,13 @@ class UserController {
       // Default permissions if not provided
       if (!permissionsData) {
         permissionsData = {
-          create: true,
-          read: true,
-          update: false,
-          delete: false,
+          resources: {
+            product: { create: true, read: true, update: true, delete: false },
+            fracticl: { create: false, read: false, update: false, delete: false },
+            tier: { create: false, read: false, update: false, delete: false },
+            cells: { create: false, read: false, update: false, delete: false },
+            batch: { create: false, read: false, update: false, delete: false },
+          },
         };
       }
 
@@ -171,9 +174,27 @@ class UserController {
       }
 
       const updateData = {};
-      if (email) updateData.email = email;
+      if (email) {
+        const emailExists = await User.emailExists(email, Number(id));
+        if (emailExists) {
+          return res.status(409).json({
+            success: false,
+            message: "Email already exists",
+          });
+        }
+        updateData.email = email;
+      }
       if (name) updateData.name = name;
-      if (unit_id) updateData.unit_id = unit_id;
+      if (unit_id) {
+        const unit = await Unit.findById(unit_id);
+        if (!unit) {
+          return res.status(404).json({
+            success: false,
+            message: "Unit not found",
+          });
+        }
+        updateData.unit_id = unit_id;
+      }
 
       // Handle permissions update
       if (permissions) {
