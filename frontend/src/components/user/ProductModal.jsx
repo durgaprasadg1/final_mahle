@@ -28,6 +28,9 @@ export const ProductModal = ({
     tier_id: "",
   });
   const [selectedTierHierarchy, setSelectedTierHierarchy] = useState(null);
+  const [tierSearchInput, setTierSearchInput] = useState("");
+  const [showTierSuggestions, setShowTierSuggestions] = useState(false);
+  const [tierInputRef, setTierInputRef] = useState(null);
 
   // Initialize form when editing
   useEffect(() => {
@@ -55,12 +58,16 @@ export const ProductModal = ({
       tier_id: "",
     });
     setSelectedTierHierarchy(null);
+    setTierSearchInput("");
+    setShowTierSuggestions(false);
   };
 
   const handleTierSelect = (tierId) => {
     setProductForm((prev) => ({ ...prev, tier_id: tierId }));
     if (!tierId) {
       setSelectedTierHierarchy(null);
+      setTierSearchInput("");
+      setShowTierSuggestions(false);
       return;
     }
 
@@ -71,8 +78,30 @@ export const ProductModal = ({
         cell: { id: tier.cell_id, name: tier.cell_name },
         fractile: { id: tier.fractile_id, name: tier.fractile_name },
       });
+      setTierSearchInput(`${tier.name} (${tier.fractile_name} → ${tier.cell_name})`);
+      setShowTierSuggestions(false);
     }
   };
+
+  const handleTierSearchChange = (value) => {
+    setTierSearchInput(value);
+    setShowTierSuggestions(true);
+    if (!value.trim()) {
+      setProductForm((prev) => ({ ...prev, tier_id: "" }));
+      setSelectedTierHierarchy(null);
+    }
+  };
+
+  const filteredTiers = tierSearchInput.trim()
+    ? allTiers.filter((t) => {
+        const searchLower = tierSearchInput.toLowerCase();
+        return (
+          t.name.toLowerCase().includes(searchLower) ||
+          t.fractile_name.toLowerCase().includes(searchLower) ||
+          t.cell_name.toLowerCase().includes(searchLower)
+        );
+      })
+    : allTiers;
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -156,18 +185,45 @@ export const ProductModal = ({
                 Select a tier - the associated Fractile and Cell will be
                 automatically linked
               </p>
-              <Select
-                id="tier"
-                value={productForm.tier_id}
-                onChange={(e) => handleTierSelect(e.target.value)}
-              >
-                <option value="">Select Tier</option>
-                {allTiers.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name} ({t.fractile_name} → {t.cell_name})
-                  </option>
-                ))}
-              </Select>
+              <div className="relative">
+                <Input
+                  id="tier"
+                  type="text"
+                  placeholder="Search and select a tier..."
+                  value={tierSearchInput}
+                  onChange={(e) => handleTierSearchChange(e.target.value)}
+                  onFocus={() => setShowTierSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowTierSuggestions(false), 300)}
+                  ref={setTierInputRef}
+                  className="w-full"
+                />
+                {showTierSuggestions && tierSearchInput && filteredTiers.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    {filteredTiers.map((tier) => (
+                      <div
+                        key={tier.id}
+                        onMouseDown={(e) => {
+                          e.preventDefault();
+                          handleTierSelect(tier.id);
+                        }}
+                        className="px-3 py-2 cursor-pointer hover:bg-blue-50 border-b last:border-b-0 transition-colors"
+                      >
+                        <div className="font-medium text-gray-900">
+                          {tier.name}
+                        </div>
+                        <div className="text-xs text-gray-500">
+                          {tier.fractile_name} → {tier.cell_name}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {showTierSuggestions && tierSearchInput && filteredTiers.length === 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg p-3">
+                    <p className="text-sm text-gray-500">No tiers found</p>
+                  </div>
+                )}
+              </div>
             </div>
 
             {selectedTierHierarchy && (
