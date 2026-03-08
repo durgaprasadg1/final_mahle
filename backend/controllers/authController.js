@@ -14,9 +14,17 @@ class AuthController {
         });
       }
 
-      const user = await User.findByEmail(email,password);
+      const user = await User.findByEmail(email);
 
       if (!user) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid email or password",
+        });
+      }
+
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
         return res.status(401).json({
           success: false,
           message: "Invalid email or password",

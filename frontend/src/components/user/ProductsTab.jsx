@@ -15,6 +15,14 @@ import { ProductModal } from "./ProductModal";
 import { Link } from "react-router-dom";
 import { DataTable } from "./table";
 
+const canAccess = (permissions, operation, resource = "product") => {
+  const scoped = permissions?.resources?.[resource]?.[operation];
+  if (typeof scoped === "boolean") {
+    return scoped;
+  }
+  return Boolean(permissions?.[operation]);
+};
+
 /**
  * Product filters component
  */ const ProductFilters = ({
@@ -314,7 +322,7 @@ export const ProductsTab = ({
         header: "Actions",
         cell: ({ row }) => (
           <div className="flex justify-end space-x-2">
-            {user?.permissions?.update && (
+            {canAccess(user?.permissions, "update", "product") && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -323,7 +331,7 @@ export const ProductsTab = ({
                 <Edit className="w-4 h-4 text-blue-600" />
               </Button>
             )}
-            {user?.permissions?.delete && (
+            {canAccess(user?.permissions, "delete", "product") && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -348,7 +356,7 @@ export const ProductsTab = ({
               <CardTitle>Products</CardTitle>
               <CardDescription>Manage products for your unit</CardDescription>
             </div>
-            {user?.permissions?.create && (
+            {canAccess(user?.permissions, "create", "product") && (
               <div className="flex items-center gap-2">
                 <Button onClick={() => setShowProductModal(true)}>
                   <Plus className="w-4 h-4 mr-2" />
