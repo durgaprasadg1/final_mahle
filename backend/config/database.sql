@@ -48,7 +48,7 @@ CREATE TABLE users (
     role user_role NOT NULL DEFAULT 'user',
     status user_status NOT NULL DEFAULT 'active',
     unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
-    permissions TEXT DEFAULT '{"c":1,"r":1,"u":1,"d":1,"m":{"product":{"c":1,"r":1,"u":1,"d":1},"fracticl":{"c":1,"r":1,"u":1,"d":1},"tier":{"c":1,"r":1,"u":1,"d":1},"cells":{"c":1,"r":1,"u":1,"d":1}}}',
+    permissions TEXT DEFAULT '{"c":1,"r":1,"u":1,"d":1,"m":{"product":{"c":1,"r":1,"u":1,"d":1},"fracticl":{"c":1,"r":1,"u":1,"d":1},"tier":{"c":1,"r":1,"u":1,"d":1},"cells":{"c":1,"r":1,"u":1,"d":1},"batch":{"c":1,"r":1,"u":1,"d":1}}}',
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,

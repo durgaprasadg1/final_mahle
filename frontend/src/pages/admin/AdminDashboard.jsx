@@ -65,6 +65,11 @@ const RESOURCE_ROWS = [
     label: "Cells",
     badgeClass: "bg-emerald-100 text-emerald-700 border-emerald-200",
   },
+  {
+    key: "batch",
+    label: "Batch",
+    badgeClass: "bg-rose-100 text-rose-700 border-rose-200",
+  },
 ];
 
 const getDefaultPermissionsMatrix = () => ({
@@ -72,6 +77,7 @@ const getDefaultPermissionsMatrix = () => ({
   fracticl: { create: false, read: false, update: false, delete: false },
   tier: { create: false, read: false, update: false, delete: false },
   cells: { create: false, read: false, update: false, delete: false },
+  batch: { create: false, read: false, update: false, delete: false },
 });
 
 const AdminDashboard = () => {
@@ -496,7 +502,7 @@ const AdminDashboard = () => {
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <Label className="text-base font-semibold">Permissions</Label>
+                  <Label className="text-base font-semibold">Permissions Matrix</Label>
                   <p className="text-sm text-gray-500 mt-1">
                     Choose what this user can do across each resource in their assigned unit.
                   </p>
