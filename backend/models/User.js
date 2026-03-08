@@ -238,6 +238,14 @@ class User {
     }
 
     const user = result.rows[0];
+    
+    // Only verify password if provided
+    if (password) {
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        return null;
+      }
+    }
 
     // Convert permissions to object for API response
     user.permissions = this.permissionsToObject(user.permissions);
