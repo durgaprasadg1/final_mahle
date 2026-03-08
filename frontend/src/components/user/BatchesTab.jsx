@@ -15,6 +15,14 @@ import { getCreatorName } from "../../utils/batchUtils";
 import { BatchModal } from "./BatchModal";
 import { DataTable } from "./table";
 
+const canAccess = (permissions, operation, resource = "cells") => {
+  const scoped = permissions?.resources?.[resource]?.[operation];
+  if (typeof scoped === "boolean") {
+    return scoped;
+  }
+  return Boolean(permissions?.[operation]);
+};
+
 /**
  * Batches Tab Component
  */
@@ -120,7 +128,7 @@ export const BatchesTab = ({
         header: "Actions",
         cell: ({ row }) => (
           <div className="flex justify-end space-x-2">
-            {user?.permissions?.delete && (
+            {canAccess(user?.permissions, "delete", "cells") && (
               <Button
                 size="sm"
                 variant="ghost"
@@ -147,7 +155,7 @@ export const BatchesTab = ({
                 Track manufacturing batches (1-hour production cycles)
               </CardDescription>
             </div>
-            {user?.permissions?.create && (
+            {canAccess(user?.permissions, "create", "cells") && (
               <Button onClick={() => setShowBatchModal(true)}>
                 <Plus className="w-4 h-4 mr-2" />
                 Record Batch

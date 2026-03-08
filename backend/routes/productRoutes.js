@@ -9,11 +9,11 @@ router.get("/types", ProductController.getProductTypes);
 router.get("/", ProductController.getAllProducts);
 router.get("/unit/:unitId", ProductController.getProductsByUnit);
 router.get("/:id", ProductController.getProductById);
-router.post("/", checkPermission("create"), ProductController.createProduct);
-router.put("/:id", checkPermission("update"), ProductController.updateProduct);
+router.post("/", checkPermission("create", "product"), ProductController.createProduct);
+router.put("/:id", checkPermission("update", "product"), ProductController.updateProduct);
 router.delete(
   "/:id",
-  checkPermission("delete"),
+  checkPermission("delete", "product"),
   ProductController.deleteProduct,
 );
 
