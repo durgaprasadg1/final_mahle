@@ -1,6 +1,5 @@
 import bcrypt from "bcryptjs";
 import pool from "../config/database.js";
-
 class User {
   static CRUD_OPERATIONS = ["create", "read", "update", "delete"];
 

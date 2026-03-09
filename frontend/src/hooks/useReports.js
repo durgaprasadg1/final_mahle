@@ -2,6 +2,8 @@ import { useState } from "react";
 import { batchAPI } from "../lib/api";
 import { toast } from "react-toastify";
 import { formatDateOnly } from "../lib/utils";
+import {jsPDF} from "jspdf";
+import autoTable from "jspdf-autotable";
 
 /**
  * Custom hook for report generation
@@ -19,6 +21,18 @@ export const useReports = () => {
   );
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportResults, setReportResults] = useState([]);
+
+  const buildReportPeriodLabel = () => {
+    if (reportType === "daily") {
+      return reportDate;
+    }
+
+    if (reportType === "range" || reportType === "custom") {
+      return `${reportDateFrom} to ${reportDateTo}`;
+    }
+
+    return reportDate;
+  };
 
   // Generate report
   const generateReport = async () => {
@@ -51,7 +65,7 @@ export const useReports = () => {
         );
         dateFrom = firstDay.toISOString().split("T")[0];
         dateTo = lastDay.toISOString().split("T")[0];
-      } else if (reportType === "custom") {
+      } else if (reportType === "custom" || reportType === "range") {
         dateFrom = reportDateFrom;
         dateTo = reportDateTo;
       }
@@ -119,11 +133,62 @@ export const useReports = () => {
     link.setAttribute("href", encodedUri);
     link.setAttribute(
       "download",
-      `Production_Report_${reportType}_${reportDate}.csv`,
+      `Production_Report_${reportType}_${buildReportPeriodLabel().replace(/\s+/g, "_")}.csv`,
     );
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  const downloadPDF = () => {
+    if (reportResults.length === 0) {
+      toast.warning("No data to download");
+      return;
+    }
+
+    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    const title = "Production Report";
+    const period = buildReportPeriodLabel();
+    const totalQuantity = reportResults.reduce(
+      (sum, batch) => sum + (Number(batch.quantity_produced) || 0),
+      0,
+    );
+    const uniqueProducts = new Set(reportResults.map((batch) => batch.product_id)).size;
+
+    doc.setFontSize(16);
+    doc.text(title, 40, 40);
+    doc.setFontSize(10);
+    doc.text(`Type: ${reportType.toUpperCase()}`, 40, 58);
+    doc.text(`Period: ${period}`, 200, 58);
+    doc.text(`Total Batches: ${reportResults.length}`, 40, 74);
+    doc.text(`Total Quantity: ${totalQuantity}`, 200, 74);
+    doc.text(`Unique Products: ${uniqueProducts}`, 360, 74);
+
+    const tableRows = reportResults.map((batch) => [
+      formatDateOnly(batch.created_at),
+      batch.shift || "-",
+      batch.product_name || "-",
+      String(batch.quantity_produced ?? "-"),
+      batch.start_time || "-",
+      batch.end_time || "-",
+      batch.had_delay || "no",
+      batch.created_by_name || "-",
+      (batch.notes || "-").toString(),
+    ]);
+
+    autoTable(doc, {
+      startY: 90,
+      head: [["Date", "Shift", "Product", "Qty", "Start", "End", "Delay", "Worker", "Notes"]],
+      body: tableRows,
+      styles: { fontSize: 8, cellPadding: 4 },
+      headStyles: { fillColor: [37, 99, 235] },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { left: 30, right: 30 },
+    });
+
+    doc.save(
+      `Production_Report_${reportType}_${period.replace(/\s+/g, "_")}.pdf`,
+    );
   };
 
   return {
@@ -139,6 +204,7 @@ export const useReports = () => {
     reportResults,
     generateReport,
     downloadExcel,
+    downloadPDF,
     clearResults: () => setReportResults([]),
   };
 };
