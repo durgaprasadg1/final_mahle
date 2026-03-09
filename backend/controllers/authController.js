@@ -14,7 +14,7 @@ class AuthController {
         });
       }
 
-      const user = await User.findByEmail(email);
+      const user = await User.findByEmail(email, password);
 
       if (!user) {
         return res.status(401).json({
