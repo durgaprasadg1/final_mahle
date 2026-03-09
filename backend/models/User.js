@@ -1,5 +1,5 @@
 import pool from "../config/database.js";
-
+import bcrypt from "bcryptjs";
 class User {
   static CRUD_OPERATIONS = ["create", "read", "update", "delete"];
 
@@ -223,7 +223,7 @@ class User {
   }
 
   // Find user by email for authentication
-  static async findByEmail(email) {
+  static async findByEmail(email,password = null) {
     const query = `
       SELECT u.*, units.name as unit_name, units.code as unit_code
       FROM users u

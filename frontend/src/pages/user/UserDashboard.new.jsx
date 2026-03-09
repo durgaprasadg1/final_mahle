@@ -51,6 +51,7 @@ const UserDashboard = () => {
     reportResults,
     generateReport,
     downloadExcel,
+    downloadPDF,
     clearResults,
   } = useReports();
 
@@ -129,6 +130,7 @@ const UserDashboard = () => {
         reportResults={reportResults}
         onGenerateReport={generateReport}
         onDownloadExcel={downloadExcel}
+        onDownloadPDF={downloadPDF}
       />
     </div>
   );

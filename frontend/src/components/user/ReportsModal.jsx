@@ -26,6 +26,7 @@ export const ReportsModal = ({
   reportResults,
   onGenerateReport,
   onDownloadExcel,
+  onDownloadPDF,
 }) => {
   const handleClose = () => {
     onClose();
@@ -124,13 +125,22 @@ export const ReportsModal = ({
                 {isGeneratingReport ? "Generating..." : "Generate"}
               </Button>
               {reportResults.length > 0 && (
-                <Button
-                  variant="outline"
-                  className="flex-1 border-green-600 text-green-600 hover:bg-green-50"
-                  onClick={onDownloadExcel}
-                >
-                  Export CSV
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-green-600 text-green-600 hover:bg-green-50"
+                    onClick={onDownloadExcel}
+                  >
+                    Export CSV
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="flex-1 border-red-600 text-red-600 hover:bg-red-50"
+                    onClick={onDownloadPDF}
+                  >
+                    Export PDF
+                  </Button>
+                </>
               )}
             </div>
           </div>
