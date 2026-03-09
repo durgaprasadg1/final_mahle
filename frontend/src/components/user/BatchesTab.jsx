@@ -8,7 +8,7 @@ import {
 } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Edit } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { formatDateOnly } from "../../lib/utils";
 import { getCreatorName } from "../../utils/batchUtils";
@@ -38,17 +38,58 @@ export const BatchesTab = ({
   products,
   user,
   onCreateBatches,
+  onUpdateBatch,
   onDeleteBatch,
 }) => {
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingBatch, setEditingBatch] = useState(null);
   const [delayDialogBatch, setDelayDialogBatch] = useState(null);
 
   const handleBatchSubmit = async (batchFormData, selectedSlots) => {
-    // Yha pe apne ko  batch createHone ke phle batches timing kaa array bnana hai
-    const result = await onCreateBatches(batchFormData, selectedSlots);
-    if (result.createdCount > 0) {
-      setShowBatchModal(false);
+    if (isEditMode && editingBatch) {
+      // Edit mode - update single batch
+      const success = await onUpdateBatch(editingBatch.id, {
+        quantity_produced: parseInt(batchFormData.quantity_produced, 10),
+        shift: batchFormData.shift,
+        start_time:
+          batchFormData.start_time.length === 5
+            ? `${batchFormData.start_time}:00`
+            : batchFormData.start_time,
+        end_time:
+          batchFormData.end_time.length === 5
+            ? `${batchFormData.end_time}:00`
+            : batchFormData.end_time,
+        notes: batchFormData.notes,
+        had_delay: batchFormData.had_delay,
+        delay_reason:
+          batchFormData.had_delay === "yes" ? batchFormData.delay_reason : "",
+      });
+
+      if (success) {
+        setShowBatchModal(false);
+        setIsEditMode(false);
+        setEditingBatch(null);
+      }
+    } else {
+      // Create mode - create multiple batches
+      const result = await onCreateBatches(batchFormData, selectedSlots);
+      if (result.createdCount > 0) {
+        setShowBatchModal(false);
+      }
     }
+  };
+
+  const handleEditBatch = (batch) => {
+    setEditingBatch(batch);
+    setIsEditMode(true);
+    setShowBatchModal(true);
+  };
+
+  const handleCloseModal = () => {
+    setShowBatchModal(false);
+    setIsEditMode(false);
+    setEditingBatch(null);
   };
 
   const columns = useMemo(
@@ -135,6 +176,15 @@ export const BatchesTab = ({
         header: "Actions",
         cell: ({ row }) => (
           <div className="flex justify-end space-x-2">
+            {canAccess(user?.permissions, "update", "cells") && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleEditBatch(row.original)}
+              >
+                <Edit className="w-4 h-4 text-blue-600" />
+              </Button>
+            )}
             {canAccess(user?.permissions, "delete", "cells") && (
               <Button
                 size="sm"
@@ -177,10 +227,12 @@ export const BatchesTab = ({
 
       <BatchModal
         isOpen={showBatchModal}
-        onClose={() => setShowBatchModal(false)}
+        onClose={handleCloseModal}
         onSubmit={handleBatchSubmit}
         products={products}
         batches={batches}
+        isEditMode={isEditMode}
+        initialBatch={editingBatch}
       />
 
       {/* Delay Reason Dialog */}

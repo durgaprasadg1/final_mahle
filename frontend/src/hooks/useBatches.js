@@ -27,7 +27,6 @@ export const useBatches = () => {
     }
   };
 
-  
   // const createBatches = async (batchFormData, selectedSlots) => {
   //   const toTimeString = (timeValue) => {
   //     if (!timeValue) return null;
@@ -37,7 +36,7 @@ export const useBatches = () => {
   //   let createdCount = 0;
   //   const errors = [];
 
-    // -----------  Ye Multiple Insert Kaa Logic
+  // -----------  Ye Multiple Insert Kaa Logic
 
   //   // for (const slotValue of selectedSlots) {
   //   //   const [startTime, endTime] = slotValue.split("|");
@@ -71,7 +70,6 @@ export const useBatches = () => {
   //   //   }
   //   // }
 
-
   //   // Show results
   //   if (createdCount > 0) {
   //     toast.success(
@@ -96,16 +94,15 @@ export const useBatches = () => {
   //   return { createdCount, errors };
   // };
 
-
   const createBatches = async (batchFormData, selectedSlots) => {
     const toTimeString = (timeValue) => {
       if (!timeValue) return null;
       return timeValue.length === 5 ? `${timeValue}:00` : timeValue;
     };
-  
+
     const batches = selectedSlots.map((slotValue) => {
       const [startTime, endTime] = slotValue.split("|");
-      
+
       return {
         product_id: parseInt(batchFormData.product_id, 10),
         quantity_produced: parseInt(batchFormData.quantity_produced, 10),
@@ -114,29 +111,44 @@ export const useBatches = () => {
         shift: batchFormData.shift || "morning",
         notes: batchFormData.notes,
         had_delay: batchFormData.had_delay,
-        delay_reason: batchFormData.had_delay === "yes" ? batchFormData.delay_reason : "",
+        delay_reason:
+          batchFormData.had_delay === "yes" ? batchFormData.delay_reason : "",
       };
     });
-  
+
     try {
       const response = await batchAPI.createBulk(batches);
-      
+
       toast.success(response.data.message);
       if (response.data.errors?.length > 0) {
         console.warn("Some batches failed:", response.data.errors);
       }
-      
+
       await fetchBatches();
-      return { 
-        createdCount: response.data.data.length, 
-        errors: response.data.errors || [] 
+      return {
+        createdCount: response.data.data.length,
+        errors: response.data.errors || [],
       };
     } catch (error) {
-      const errorMsg = error.response?.data?.message || "Failed to create batches";
+      const errorMsg =
+        error.response?.data?.message || "Failed to create batches";
       toast.error(errorMsg);
       return { createdCount: 0, errors: [errorMsg] };
     }
   };
+  // Update batch
+  const updateBatch = async (batchId, batchData) => {
+    try {
+      await batchAPI.update(batchId, batchData);
+      toast.success("Batch updated successfully");
+      await fetchBatches();
+      return true;
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to update batch");
+      return false;
+    }
+  };
+
   // Delete batch
   const deleteBatch = async (batchId) => {
     if (!window.confirm("Are you sure you want to delete this batch?"))
@@ -162,6 +174,7 @@ export const useBatches = () => {
     batches,
     fetchBatches,
     createBatches,
+    updateBatch,
     deleteBatch,
   };
 };

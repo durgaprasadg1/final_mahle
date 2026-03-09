@@ -16,7 +16,7 @@ import {
 import { generateTimeSlots } from "../../utils/timeUtils";
 
 /**
- * Batch Modal Component for Creating Batches
+ * Batch Modal Component for Creating/Editing Batches
  */
 export const BatchModal = ({
   isOpen,
@@ -24,6 +24,8 @@ export const BatchModal = ({
   onSubmit,
   products,
   batches,
+  isEditMode = false,
+  initialBatch = null,
 }) => {
   const [batchForm, setBatchForm] = useState({
     product_id: "",
@@ -51,12 +53,26 @@ export const BatchModal = ({
       const shifts = loadBatchShiftConfigs();
       setAvailableShifts(shifts);
 
-      // Auto-select first shift config
-      if (shifts.length > 0) {
-        applyShiftConfigToBatchForm(shifts[0].id, null, shifts);
+      // Initialize form for edit mode
+      if (isEditMode && initialBatch) {
+        setBatchForm({
+          product_id: String(initialBatch.product_id),
+          quantity_produced: String(initialBatch.quantity_produced),
+          start_time: initialBatch.start_time?.substring(0, 5) || "",
+          end_time: initialBatch.end_time?.substring(0, 5) || "",
+          shift: initialBatch.shift || "morning",
+          notes: initialBatch.notes || "",
+          had_delay: initialBatch.had_delay || "no",
+          delay_reason: initialBatch.delay_reason || "",
+        });
+      } else {
+        // Auto-select first shift config for create mode
+        if (shifts.length > 0) {
+          applyShiftConfigToBatchForm(shifts[0].id, null, shifts);
+        }
       }
     }
-  }, [isOpen]);
+  }, [isOpen, isEditMode, initialBatch]);
 
   const resetForm = () => {
     setBatchForm({
@@ -177,16 +193,36 @@ export const BatchModal = ({
       toast.error("Quantity produced must be at least 1");
       return;
     }
-    if (selectedBatchSlots.length === 0) {
-      toast.error("Please select at least one time slot");
-      return;
-    }
-    if (batchForm.had_delay === "yes" && !batchForm.delay_reason.trim()) {
-      toast.error("Please provide a reason for the delay");
-      return;
-    }
 
-    await onSubmit(batchForm, selectedBatchSlots);
+    // For edit mode, validate time inputs
+    if (isEditMode) {
+      if (!batchForm.start_time || !batchForm.end_time) {
+        toast.error("Please provide start and end times");
+        return;
+      }
+      if (batchForm.had_delay === "yes" && !batchForm.delay_reason.trim()) {
+        toast.error("Please provide a reason for the delay");
+        return;
+      }
+
+      // Call onSubmit with batch data for updating
+      await onSubmit({
+        ...batchForm,
+        quantity_produced: qty,
+      });
+    } else {
+      // Create mode - validate slots
+      if (selectedBatchSlots.length === 0) {
+        toast.error("Please select at least one time slot");
+        return;
+      }
+      if (batchForm.had_delay === "yes" && !batchForm.delay_reason.trim()) {
+        toast.error("Please provide a reason for the delay");
+        return;
+      }
+
+      await onSubmit(batchForm, selectedBatchSlots);
+    }
   };
 
   const handleClose = () => {
@@ -247,7 +283,9 @@ export const BatchModal = ({
     <Dialog open={isOpen} onOpenChange={handleClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Record Production Batch</DialogTitle>
+          <DialogTitle>
+            {isEditMode ? "Edit Production Batch" : "Record Production Batch"}
+          </DialogTitle>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-4">
           {/* Product Selection */}
@@ -258,7 +296,7 @@ export const BatchModal = ({
               value={batchForm.product_id}
               onChange={(e) => handleProductChange(e.target.value)}
               required
-              disabled={usePreviousBatch}
+              disabled={usePreviousBatch || isEditMode}
             >
               <option value="">Select Product</option>
               {products.map((product) => (
@@ -267,74 +305,81 @@ export const BatchModal = ({
                 </option>
               ))}
             </Select>
-          </div>
-
-          {/* Previous Batch Checkbox */}
-          <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-            <label
-              className={`flex items-center gap-3 ${
-                batchForm.product_id && previousBatchesCount > 0
-                  ? "cursor-pointer"
-                  : "cursor-not-allowed opacity-50"
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={usePreviousBatch}
-                onChange={(e) => handlePreviousBatchToggle(e.target.checked)}
-                disabled={!batchForm.product_id || previousBatchesCount === 0}
-                className="w-5 h-5 cursor-pointer"
-              />
-              <span className="font-semibold text-sm text-blue-900">
-                Same as Previous Batch
-                {batchForm.product_id && previousBatchesCount === 0 && (
-                  <span className="font-normal text-xs ml-2">
-                    (No previous batches for this product)
-                  </span>
-                )}
-                {!batchForm.product_id && (
-                  <span className="font-normal text-xs ml-2">
-                    (Select a product first)
-                  </span>
-                )}
-              </span>
-            </label>
-
-            {usePreviousBatch && (
-              <div className="mt-3 ml-8 space-y-2">
-                <Label htmlFor="previousBatch">Select Previous Batch *</Label>
-                <Select
-                  id="previousBatch"
-                  value={selectedPreviousBatchId}
-                  onChange={(e) => {
-                    const batchId = e.target.value;
-                    setSelectedPreviousBatchId(batchId);
-                    const selectedBatch = filteredPreviousBatches.find(
-                      (b) => String(b.id) === batchId,
-                    );
-                    if (selectedBatch) {
-                      copyFromPreviousBatch(selectedBatch);
-                    }
-                  }}
-                  required={usePreviousBatch}
-                >
-                  <option value="">Select a batch to copy</option>
-                  {filteredPreviousBatches.map((batch) => (
-                    <option key={batch.id} value={String(batch.id)}>
-                      {batch.start_time} to {batch.end_time} (Qty:{" "}
-                      {batch.quantity_produced}, Shift: {batch.shift})
-                    </option>
-                  ))}
-                </Select>
-              </div>
+            {isEditMode && (
+              <p className="text-xs text-gray-500">
+                Product cannot be changed when editing
+              </p>
             )}
           </div>
+
+          {/* Previous Batch Checkbox - Only show in create mode */}
+          {!isEditMode && (
+            <div className="space-y-3 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+              <label
+                className={`flex items-center gap-3 ${
+                  batchForm.product_id && previousBatchesCount > 0
+                    ? "cursor-pointer"
+                    : "cursor-not-allowed opacity-50"
+                }`}
+              >
+                <input
+                  type="checkbox"
+                  checked={usePreviousBatch}
+                  onChange={(e) => handlePreviousBatchToggle(e.target.checked)}
+                  disabled={!batchForm.product_id || previousBatchesCount === 0}
+                  className="w-5 h-5 cursor-pointer"
+                />
+                <span className="font-semibold text-sm text-blue-900">
+                  Same as Previous Batch
+                  {batchForm.product_id && previousBatchesCount === 0 && (
+                    <span className="font-normal text-xs ml-2">
+                      (No previous batches for this product)
+                    </span>
+                  )}
+                  {!batchForm.product_id && (
+                    <span className="font-normal text-xs ml-2">
+                      (Select a product first)
+                    </span>
+                  )}
+                </span>
+              </label>
+
+              {usePreviousBatch && (
+                <div className="mt-3 ml-8 space-y-2">
+                  <Label htmlFor="previousBatch">Select Previous Batch *</Label>
+                  <Select
+                    id="previousBatch"
+                    value={selectedPreviousBatchId}
+                    onChange={(e) => {
+                      const batchId = e.target.value;
+                      setSelectedPreviousBatchId(batchId);
+                      const selectedBatch = filteredPreviousBatches.find(
+                        (b) => String(b.id) === batchId,
+                      );
+                      if (selectedBatch) {
+                        copyFromPreviousBatch(selectedBatch);
+                      }
+                    }}
+                    required={usePreviousBatch}
+                  >
+                    <option value="">Select a batch to copy</option>
+                    {filteredPreviousBatches.map((batch) => (
+                      <option key={batch.id} value={String(batch.id)}>
+                        {batch.start_time} to {batch.end_time} (Qty:{" "}
+                        {batch.quantity_produced}, Shift: {batch.shift})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Quantity */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">
               <Label htmlFor="quantity">Quantity Produced *</Label>
-              {usePreviousBatch && (
+              {usePreviousBatch && !isEditMode && (
                 <span className="text-xs text-gray-500">
                   (from previous batch)
                 </span>
@@ -356,115 +401,175 @@ export const BatchModal = ({
           </div>
 
           {/* Shift Selection */}
-          <div className="space-y-2">
-            <div className="flex items-center gap-2">
-              <Label>Shift *</Label>
-              {usePreviousBatch && (
-                <span className="text-xs text-gray-500">
-                  (from previous batch)
-                </span>
-              )}
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-              {getShiftChoices().map((shiftConfig) => (
-                <label
-                  key={`${shiftConfig.id}-${shiftConfig.backendShift}`}
-                  className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer ${
-                    (
-                      selectedShiftConfigId
-                        ? String(selectedShiftConfigId) ===
-                          String(shiftConfig.id)
-                        : (batchForm.shift || "morning") ===
-                          shiftConfig.backendShift
-                    )
-                      ? "border-primary bg-primary/5"
-                      : "border-gray-200"
-                  } ${usePreviousBatch ? "opacity-60 cursor-not-allowed" : ""}`}
-                >
-                  <input
-                    type="radio"
-                    name="shift"
-                    value={shiftConfig.id}
-                    checked={
-                      selectedShiftConfigId
-                        ? String(selectedShiftConfigId) ===
-                          String(shiftConfig.id)
-                        : (batchForm.shift || "morning") ===
-                          shiftConfig.backendShift
-                    }
-                    onChange={() => applyShiftConfigToBatchForm(shiftConfig.id)}
-                    disabled={usePreviousBatch}
-                  />
-                  <span className="text-sm">{getShiftLabel(shiftConfig)}</span>
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Time Slot Selection */}
-          <div className="space-y-2">
-            <Label>Time Slot *</Label>
-            <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-64 overflow-y-auto bg-gray-50">
-              {batchTimeSlots
-                .filter((slot) => {
-                  const isCurrentSlotSelected = selectedBatchSlots.includes(
-                    slot.value,
-                  );
-                  if (isCurrentSlotSelected) return true;
-
-                  const today = new Date().toISOString().split("T")[0];
-                  const isUsed = batches.some((b) => {
-                    const batchDate = b.created_at
-                      ? new Date(b.created_at).toISOString().split("T")[0]
-                      : today;
-
-                    const normStartTime = (b.start_time || "").substring(0, 5);
-                    const normEndTime = (b.end_time || "").substring(0, 5);
-
-                    return (
-                      String(b.product_id) === String(batchForm.product_id) &&
-                      normStartTime ===
-                        (slot.startTime || "").substring(0, 5) &&
-                      normEndTime === (slot.endTime || "").substring(0, 5) &&
-                      batchDate === today
-                    );
-                  });
-                  return !isUsed;
-                })
-                .map((slot) => (
+          {!isEditMode && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <Label>Shift *</Label>
+                {usePreviousBatch && (
+                  <span className="text-xs text-gray-500">
+                    (from previous batch)
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+                {getShiftChoices().map((shiftConfig) => (
                   <label
-                    key={slot.value}
-                    className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${
-                      selectedBatchSlots.includes(slot.value)
-                        ? "border-primary bg-primary/10"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
+                    key={`${shiftConfig.id}-${shiftConfig.backendShift}`}
+                    className={`flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer ${
+                      (
+                        selectedShiftConfigId
+                          ? String(selectedShiftConfigId) ===
+                            String(shiftConfig.id)
+                          : (batchForm.shift || "morning") ===
+                            shiftConfig.backendShift
+                      )
+                        ? "border-primary bg-primary/5"
+                        : "border-gray-200"
+                    } ${usePreviousBatch ? "opacity-60 cursor-not-allowed" : ""}`}
                   >
                     <input
-                      type="checkbox"
-                      checked={selectedBatchSlots.includes(slot.value)}
-                      onChange={() => {
-                        setSelectedBatchSlots((prev) =>
-                          prev.includes(slot.value)
-                            ? prev.filter((v) => v !== slot.value)
-                            : [...prev, slot.value],
-                        );
-                      }}
-                      className="w-4 h-4 cursor-pointer"
+                      type="radio"
+                      name="shift"
+                      value={shiftConfig.id}
+                      checked={
+                        selectedShiftConfigId
+                          ? String(selectedShiftConfigId) ===
+                            String(shiftConfig.id)
+                          : (batchForm.shift || "morning") ===
+                            shiftConfig.backendShift
+                      }
+                      onChange={() =>
+                        applyShiftConfigToBatchForm(shiftConfig.id)
+                      }
+                      disabled={usePreviousBatch}
                     />
-                    <span className="text-sm font-medium">{slot.label}</span>
+                    <span className="text-sm">
+                      {getShiftLabel(shiftConfig)}
+                    </span>
                   </label>
                 ))}
+              </div>
             </div>
-            {batchTimeSlots.length === 0 && (
-              <p className="text-sm text-gray-500">
-                No available slots for this product today.
+          )}
+
+          {/* For Edit Mode: Show simple time and shift inputs */}
+          {isEditMode && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="editShift">Shift *</Label>
+                <Select
+                  id="editShift"
+                  value={batchForm.shift}
+                  onChange={(e) =>
+                    setBatchForm({ ...batchForm, shift: e.target.value })
+                  }
+                  required
+                >
+                  <option value="morning">Morning</option>
+                  <option value="afternoon">Afternoon</option>
+                  <option value="night">Night</option>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editStartTime">Start Time *</Label>
+                  <Input
+                    id="editStartTime"
+                    type="time"
+                    value={batchForm.start_time}
+                    onChange={(e) =>
+                      setBatchForm({ ...batchForm, start_time: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editEndTime">End Time *</Label>
+                  <Input
+                    id="editEndTime"
+                    type="time"
+                    value={batchForm.end_time}
+                    onChange={(e) =>
+                      setBatchForm({ ...batchForm, end_time: e.target.value })
+                    }
+                    required
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Time Slot Selection - Only show in create mode */}
+          {!isEditMode && (
+            <div className="space-y-2">
+              <Label>Time Slot *</Label>
+              <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-64 overflow-y-auto bg-gray-50">
+                {batchTimeSlots
+                  .filter((slot) => {
+                    const isCurrentSlotSelected = selectedBatchSlots.includes(
+                      slot.value,
+                    );
+                    if (isCurrentSlotSelected) return true;
+
+                    const today = new Date().toISOString().split("T")[0];
+                    const isUsed = batches.some((b) => {
+                      const batchDate = b.created_at
+                        ? new Date(b.created_at).toISOString().split("T")[0]
+                        : today;
+
+                      const normStartTime = (b.start_time || "").substring(
+                        0,
+                        5,
+                      );
+                      const normEndTime = (b.end_time || "").substring(0, 5);
+
+                      return (
+                        String(b.product_id) === String(batchForm.product_id) &&
+                        normStartTime ===
+                          (slot.startTime || "").substring(0, 5) &&
+                        normEndTime === (slot.endTime || "").substring(0, 5) &&
+                        batchDate === today
+                      );
+                    });
+                    return !isUsed;
+                  })
+                  .map((slot) => (
+                    <label
+                      key={slot.value}
+                      className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${
+                        selectedBatchSlots.includes(slot.value)
+                          ? "border-primary bg-primary/10"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedBatchSlots.includes(slot.value)}
+                        onChange={() => {
+                          setSelectedBatchSlots((prev) =>
+                            prev.includes(slot.value)
+                              ? prev.filter((v) => v !== slot.value)
+                              : [...prev, slot.value],
+                          );
+                        }}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-sm font-medium">{slot.label}</span>
+                    </label>
+                  ))}
+              </div>
+              {batchTimeSlots.length === 0 && (
+                <p className="text-sm text-gray-500">
+                  No available slots for this product today.
+                </p>
+              )}
+              <p className="text-xs text-gray-500">
+                Slot list is auto-generated from admin shift timing and
+                interval.
               </p>
-            )}
-            <p className="text-xs text-gray-500">
-              Slot list is auto-generated from admin shift timing and interval.
-            </p>
-          </div>
+            </div>
+          )}
 
           {/* Notes */}
           <div className="space-y-2">
@@ -550,7 +655,9 @@ export const BatchModal = ({
             <Button type="button" variant="outline" onClick={handleClose}>
               Cancel
             </Button>
-            <Button type="submit">Record Batch</Button>
+            <Button type="submit">
+              {isEditMode ? "Update Batch" : "Record Batch"}
+            </Button>
           </div>
         </form>
       </DialogContent>

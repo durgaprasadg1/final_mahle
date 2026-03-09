@@ -1,3 +1,4 @@
+import bcrypt from "bcryptjs";
 import pool from "../config/database.js";
 
 class User {
@@ -8,9 +9,9 @@ class User {
   static RESOURCE_ALIASES = {
     product: "product",
     products: "product",
-    fracticl: "fracticl",
-    fractile: "fracticl",
-    fractiles: "fracticl",
+    fracticle: "fracticle",
+    fractile: "fracticle",
+    fractiles: "fracticle",
     tier: "tier",
     tiers: "tier",
     cell: "cells",
@@ -223,7 +224,7 @@ class User {
   }
 
   // Find user by email for authentication
-  static async findByEmail(email) {
+  static async findByEmail(email, password) {
     const query = `
       SELECT u.*, units.name as unit_name, units.code as unit_code
       FROM users u
@@ -239,7 +240,6 @@ class User {
 
     const user = result.rows[0];
     
-    // Only verify password if provided
     if (password) {
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
@@ -247,7 +247,6 @@ class User {
       }
     }
 
-    // Convert permissions to object for API response
     user.permissions = this.permissionsToObject(user.permissions);
 
     return user;
