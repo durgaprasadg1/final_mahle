@@ -1,55 +1,184 @@
+import bcrypt from "bcryptjs";
 import pool from "../config/database.js";
-
 class User {
-  // Helper: Convert permissions to JSON object for JSONB storage
-  static permissionsToJSON(permissionsInput) {
-    // If already an object, return as-is
-    if (typeof permissionsInput === "object" && permissionsInput !== null) {
-      return {
-        create: Boolean(permissionsInput.create),
-        read: Boolean(permissionsInput.read),
-        update: Boolean(permissionsInput.update),
-        delete: Boolean(permissionsInput.delete),
-      };
-    }
+  static CRUD_OPERATIONS = ["create", "read", "update", "delete"];
 
-    // If string like "create,read", convert to object
-    if (typeof permissionsInput === "string") {
-      const permsArray = permissionsInput.split(",").map((p) => p.trim());
-      return {
-        create: permsArray.includes("create"),
-        read: permsArray.includes("read"),
-        update: permsArray.includes("update"),
-        delete: permsArray.includes("delete"),
-      };
-    }
+  static RESOURCE_KEYS = ["product", "fracticl", "tier", "cells", "batch"];
 
-    // Default permissions
-    return { create: false, read: true, update: false, delete: false };
+  static RESOURCE_ALIASES = {
+    product: "product",
+    products: "product",
+    fracticle: "fracticle",
+    fractile: "fracticle",
+    fractiles: "fracticle",
+    tier: "tier",
+    tiers: "tier",
+    cell: "cells",
+    cells: "cells",
+    batch: "batch",
+    batches: "batch",
+  };
+
+  static normalizeResourceKey(resource) {
+    const key = String(resource || "")
+      .trim()
+      .toLowerCase();
+    return this.RESOURCE_ALIASES[key] || null;
   }
 
-  // Helper: Convert JSON object/string to permissions object
+  static buildCrudObject(input = {}, fallback = false) {
+    const normalized = {};
+    this.CRUD_OPERATIONS.forEach((operation) => {
+      const compactKey = operation[0];
+      if (Object.prototype.hasOwnProperty.call(input, operation)) {
+        normalized[operation] = Boolean(input[operation]);
+      } else if (Object.prototype.hasOwnProperty.call(input, compactKey)) {
+        normalized[operation] = Boolean(input[compactKey]);
+      } else {
+        normalized[operation] = Boolean(fallback);
+      }
+    });
+    return normalized;
+  }
+
+  static aggregateResources(resources = {}) {
+    const aggregate = this.buildCrudObject();
+    this.RESOURCE_KEYS.forEach((resourceKey) => {
+      const resourcePerms = this.buildCrudObject(resources[resourceKey]);
+      this.CRUD_OPERATIONS.forEach((operation) => {
+        aggregate[operation] = aggregate[operation] || resourcePerms[operation];
+      });
+    });
+    return aggregate;
+  }
+
+  static buildResources(resourceInput = {}, fallbackCrud = null) {
+    const resources = {};
+    const normalizedResourceInput = {};
+
+    Object.entries(resourceInput || {}).forEach(([resourceKey, value]) => {
+      const normalizedKey = this.normalizeResourceKey(resourceKey);
+      if (!normalizedKey || typeof value !== "object" || value === null) {
+        return;
+      }
+      normalizedResourceInput[normalizedKey] = value;
+    });
+
+    this.RESOURCE_KEYS.forEach((resourceKey) => {
+      const explicit =
+        normalizedResourceInput[resourceKey] || resourceInput[resourceKey[0]];
+      resources[resourceKey] = explicit
+        ? this.buildCrudObject(explicit)
+        : this.buildCrudObject(fallbackCrud || {});
+    });
+    return resources;
+  }
+
+  static parsePermissionsObject(rawObject = {}) {
+    const compactMatrix = rawObject.m && typeof rawObject.m === "object" ? rawObject.m : {};
+    const expandedMatrix =
+      rawObject.resources && typeof rawObject.resources === "object"
+        ? rawObject.resources
+        : rawObject.matrix && typeof rawObject.matrix === "object"
+          ? rawObject.matrix
+          : rawObject.resource_permissions && typeof rawObject.resource_permissions === "object"
+            ? rawObject.resource_permissions
+            : {};
+
+    const topLevelResources = this.RESOURCE_KEYS.reduce((acc, resourceKey) => {
+      if (rawObject[resourceKey] && typeof rawObject[resourceKey] === "object") {
+        acc[resourceKey] = rawObject[resourceKey];
+      }
+      return acc;
+    }, {});
+
+    const flatCrudFromInput = this.buildCrudObject(rawObject);
+    const hasExplicitFlat = this.CRUD_OPERATIONS.some(
+      (operation) =>
+        Object.prototype.hasOwnProperty.call(rawObject, operation) ||
+        Object.prototype.hasOwnProperty.call(rawObject, operation[0]),
+    );
+
+    const resources = this.buildResources(
+      {
+        ...compactMatrix,
+        ...expandedMatrix,
+        ...topLevelResources,
+      },
+      hasExplicitFlat ? flatCrudFromInput : null,
+    );
+
+    const aggregatedCrud = this.aggregateResources(resources);
+    const effectiveCrud = hasExplicitFlat
+      ? this.CRUD_OPERATIONS.reduce((acc, operation) => {
+          acc[operation] = Boolean(flatCrudFromInput[operation] || aggregatedCrud[operation]);
+          return acc;
+        }, {})
+      : aggregatedCrud;
+
+    return {
+      ...effectiveCrud,
+      resources,
+    };
+  }
+
+  // Backward-compatible name used by existing code paths.
+  static permissionsToJSON(permissionsInput) {
+    return this.permissionsToObject(permissionsInput);
+  }
+
+  static permissionsToStorage(permissionsInput) {
+    const normalized = this.permissionsToObject(permissionsInput);
+
+    const compactResources = {};
+    this.RESOURCE_KEYS.forEach((resourceKey) => {
+      const resourcePerms = normalized.resources?.[resourceKey] || {};
+      compactResources[resourceKey] = {
+        c: resourcePerms.create ? 1 : 0,
+        r: resourcePerms.read ? 1 : 0,
+        u: resourcePerms.update ? 1 : 0,
+        d: resourcePerms.delete ? 1 : 0,
+      };
+    });
+
+    const compactPayload = {
+      c: normalized.create ? 1 : 0,
+      r: normalized.read ? 1 : 0,
+      u: normalized.update ? 1 : 0,
+      d: normalized.delete ? 1 : 0,
+      m: compactResources,
+    };
+
+    return JSON.stringify(compactPayload);
+  }
+
+  // Helper: Convert JSON object/string/csv to permissions object
   static permissionsToObject(permissionsInput) {
-    // If string (from database JSONB or CSV)
+    if (permissionsInput && typeof permissionsInput === "object") {
+      return this.parsePermissionsObject(permissionsInput);
+    }
+
     if (typeof permissionsInput === "string") {
       try {
-        // Try parsing as JSON first
         const parsed = JSON.parse(permissionsInput);
-        return this.permissionsToJSON(parsed);
-      } catch (e) {
-        // Fall back to CSV parsing
-        const permsArray = permissionsInput.split(",").map((p) => p.trim());
-        return {
+        return this.parsePermissionsObject(parsed);
+      } catch (error) {
+        const permsArray = permissionsInput
+          .split(",")
+          .map((p) => p.trim().toLowerCase())
+          .filter(Boolean);
+        const flatCrud = {
           create: permsArray.includes("create"),
           read: permsArray.includes("read"),
           update: permsArray.includes("update"),
           delete: permsArray.includes("delete"),
         };
+        return this.parsePermissionsObject(flatCrud);
       }
     }
 
-    // If already an object
-    return this.permissionsToJSON(permissionsInput);
+    // Legacy-safe default: read access only.
+    return this.parsePermissionsObject({ read: true });
   }
 
   // Create a new user
@@ -65,8 +194,7 @@ class User {
       created_by,
     } = userData;
 
-    // Convert permissions to JSON object
-    const permissionsObj = this.permissionsToJSON(permissions);
+    const permissionsObj = this.permissionsToObject(permissions);
 
     const query = `
       INSERT INTO users (email, password, name, role, status, unit_id, permissions, created_by)
@@ -81,7 +209,7 @@ class User {
       role || "user",
       status || "active",
       unit_id,
-      JSON.stringify(permissionsObj), // Store as JSON string for JSONB column
+      this.permissionsToStorage(permissionsObj),
       created_by,
     ];
 
@@ -94,25 +222,49 @@ class User {
     return user;
   }
 
-  // Find user by email
-  static async findByEmail(email) {
+  // Find user by email for authentication
+  static async findByEmail(email, password) {
     const query = `
       SELECT u.*, units.name as unit_name, units.code as unit_code
       FROM users u
       LEFT JOIN units ON u.unit_id = units.id
-      WHERE u.email = $1
+      WHERE u.email = $1 AND u.status != 'blocked' 
+      LIMIT 1
     `;
     const result = await pool.query(query, [email]);
-    
+
     if (!result.rows.length) {
       return null;
     }
 
     const user = result.rows[0];
-    // Convert permissions to object for API response
-    user.permissions = this.permissionsToObject(user.permissions);
     
+    if (password) {
+      const isPasswordValid = await bcrypt.compare(password, user.password);
+      if (!isPasswordValid) {
+        return null;
+      }
+    }
+
+    user.permissions = this.permissionsToObject(user.permissions);
+
     return user;
+  }
+
+  // Lightweight existence check used by create/update flows
+  static async emailExists(email, excludeUserId = null) {
+    const values = [email];
+    let query = "SELECT 1 FROM users WHERE email = $1";
+
+    if (excludeUserId) {
+      values.push(excludeUserId);
+      query += " AND id != $2";
+    }
+
+    query += " LIMIT 1";
+
+    const result = await pool.query(query, values);
+    return result.rows.length > 0;
   }
 
   // Find user by ID
@@ -193,8 +345,7 @@ class User {
         // Special handling for permissions
         if (key === "permissions") {
           fields.push(`${key} = $${paramCount}`);
-          const permissionsObj = this.permissionsToJSON(updateData[key]);
-          values.push(JSON.stringify(permissionsObj)); // Convert to JSON string for JSONB
+          values.push(this.permissionsToStorage(updateData[key]));
         } else {
           fields.push(`${key} = $${paramCount}`);
           values.push(updateData[key]);
@@ -266,13 +417,23 @@ class User {
     return result.rows;
   }
 
-  // Check if user has specific permission
-  static hasPermission(permissionsStr, permission) {
-    if (!permissionsStr || typeof permissionsStr !== "string") {
+  // Check if user has specific permission (supports optional resource scope)
+  static hasPermission(permissionsInput, permission, resource = null) {
+    if (!permission) {
       return false;
     }
-    const permsArray = permissionsStr.split(",").map((p) => p.trim());
-    return permsArray.includes(permission);
+
+    const normalizedPermissions = this.permissionsToObject(permissionsInput);
+
+    if (resource) {
+      const resourceKey = this.normalizeResourceKey(resource);
+      if (!resourceKey) {
+        return false;
+      }
+      return Boolean(normalizedPermissions.resources?.[resourceKey]?.[permission]);
+    }
+
+    return Boolean(normalizedPermissions?.[permission]);
   }
 }
 

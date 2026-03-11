@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import { useAuth } from "../../contexts/AuthContext";
 import { userAPI, unitAPI } from "../../lib/api";
 import ShiftDashboard from "./ShiftDashboard";
-import Navbar from "../../components/Navbar";
+import UnitsManagement from "./UnitsManagement";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -13,14 +14,6 @@ import {
   CardHeader,
   CardTitle,
 } from "../../components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +33,50 @@ import {
   Eye,
 } from "lucide-react";
 import { formatDate, formatDateOnly } from "../../lib/utils";
+import { DataTable } from "../../components/user/table";
+
+const PERMISSION_OPERATIONS = [
+  { key: "create", label: "CREATE", description: "Add records" },
+  { key: "read", label: "READ", description: "View records" },
+  { key: "update", label: "UPDATE", description: "Edit records" },
+  { key: "delete", label: "DELETE", description: "Remove records" },
+];
+
+const RESOURCE_ROWS = [
+  {
+    key: "product",
+    label: "Product",
+    badgeClass: "bg-indigo-100 text-indigo-700 border-indigo-200",
+  },
+  {
+    key: "fracticl",
+    label: "Fracticl",
+    badgeClass: "bg-amber-100 text-amber-700 border-amber-200",
+  },
+  {
+    key: "tier",
+    label: "Tier",
+    badgeClass: "bg-sky-100 text-sky-700 border-sky-200",
+  },
+  {
+    key: "cells",
+    label: "Cells",
+    badgeClass: "bg-emerald-100 text-emerald-700 border-emerald-200",
+  },
+  {
+    key: "batch",
+    label: "Batch",
+    badgeClass: "bg-rose-100 text-rose-700 border-rose-200",
+  },
+];
+
+const getDefaultPermissionsMatrix = () => ({
+  product: { create: true, read: true, update: true, delete: false },
+  fracticl: { create: false, read: false, update: false, delete: false },
+  tier: { create: false, read: false, update: false, delete: false },
+  cells: { create: false, read: false, update: false, delete: false },
+  batch: { create: false, read: false, update: false, delete: false },
+});
 
 const AdminDashboard = () => {
   const [users, setUsers] = useState([]);
@@ -56,12 +93,7 @@ const AdminDashboard = () => {
     email: "",
     password: "",
     unit_id: "",
-    permissions: {
-      create: true,
-      read: true,
-      update: true,
-      delete: false,
-    },
+    permissions: getDefaultPermissionsMatrix(),
   });
 
   useEffect(() => {
@@ -118,12 +150,42 @@ const AdminDashboard = () => {
         email: "",
         password: "",
         unit_id: "",
-        permissions: { create: true, read: true, update: true, delete: false },
+        permissions: getDefaultPermissionsMatrix(),
       });
       fetchUsers();
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to create user");
     }
+  };
+
+  const updatePermissionCell = (resource, operation, checked) => {
+    setFormData((prev) => ({
+      ...prev,
+      permissions: {
+        ...prev.permissions,
+        [resource]: {
+          ...prev.permissions[resource],
+          [operation]: checked,
+        },
+      },
+    }));
+  };
+
+  const setAllMatrixPermissions = (checked) => {
+    setFormData((prev) => {
+      const nextPermissions = {};
+      RESOURCE_ROWS.forEach((resource) => {
+        nextPermissions[resource.key] = {};
+        PERMISSION_OPERATIONS.forEach((operation) => {
+          nextPermissions[resource.key][operation.key] = checked;
+        });
+      });
+
+      return {
+        ...prev,
+        permissions: nextPermissions,
+      };
+    });
   };
 
   const handleToggleStatus = async (userId, currentStatus) => {
@@ -151,24 +213,132 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    toast.info("Logged out successfully");
+  };
+
+  const userColumns = useMemo(
+    () => [
+      {
+        accessorKey: "name",
+        header: "Name",
+        cell: ({ getValue }) => <div className="font-medium">{getValue()}</div>,
+      },
+      {
+        accessorKey: "email",
+        header: "Email",
+        cell: ({ getValue }) => getValue(),
+      },
+      {
+        id: "unit",
+        header: "Unit",
+        cell: ({ row }) => (
+          <Badge variant="outline">{row.original.unit_code || "N/A"}</Badge>
+        ),
+      },
+      {
+        accessorKey: "status",
+        header: "Status",
+        cell: ({ getValue }) => (
+          <Badge variant={getValue() === "active" ? "success" : "destructive"}>
+            {getValue()}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "created_at",
+        header: "Created",
+        cell: ({ getValue }) => formatDateOnly(getValue()),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => {
+          const user = row.original;
+          return (
+            <div className="flex justify-end space-x-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => {
+                  setSelectedUser(user);
+                  setShowDetailsModal(true);
+                }}
+              >
+                <Eye className="w-4 h-4" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleToggleStatus(user.id, user.status)}
+              >
+                {user.status === "active" ? (
+                  <UserX className="w-4 h-4 text-orange-600" />
+                ) : (
+                  <UserCheck className="w-4 h-4 text-green-600" />
+                )}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => handleDeleteUser(user.id)}
+              >
+                <Trash2 className="w-4 h-4 text-red-600" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [],
+  );
+
   if (currentView === "shift") {
     return <ShiftDashboard onBack={() => setCurrentView("admin")} />;
   }
 
+  if (currentView === "units") {
+    return <UnitsManagement onBack={() => setCurrentView("admin")} />;
+  }
+
   return (
     <div className="min-h-screen bg-gray-50">
-      <Navbar
-        onDashboardClick={() => {
-          setCurrentView("admin");
-          setActiveAdminTab("dashboard");
-        }}
-        onUsersClick={() => {
-          setCurrentView("admin");
-          setActiveAdminTab("users");
-        }}
-        onShiftMakerClick={() => setCurrentView("shift")}
-        activeItem={activeAdminTab}
-      />
+      <header className="bg-white shadow-sm border-b">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex justify-between items-center">
+            <div className="flex items-center space-x-4">
+              <Shield className="w-8 h-8 text-primary" />
+              <div>
+                <h1 className="text-2xl font-bold text-gray-900">
+                  Admin Dashboard
+                </h1>
+                <p className="text-sm text-gray-500">
+                  Mahle Inventory Management
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center space-x-4">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentView("units")}
+              >
+                Manage Units
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCurrentView("shift")}
+              >
+                ShiftMaker
+              </Button>
+              <div className="text-right">
+                <p className="text-sm font-medium text-gray-900">
+                  {user?.name}
+                </p>
+                <p className="text-xs text-gray-500">{user?.email}</p>
+              </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
         <h1 className="text-2xl font-bold text-gray-900">
@@ -239,86 +409,25 @@ const AdminDashboard = () => {
                   Create User
                 </Button>
               </div>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="text-center py-8">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
-                </div>
-              ) : (
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Name</TableHead>
-                      <TableHead>Email</TableHead>
-                      <TableHead>Unit</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Created</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {users
-                      .filter((u) => u.role === "user")
-                      .map((user) => (
-                        <TableRow key={user.id}>
-                          <TableCell className="font-medium">{user.name}</TableCell>
-                          <TableCell>{user.email}</TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{user.unit_code || "N/A"}</Badge>
-                          </TableCell>
-                          <TableCell>
-                            <Badge
-                              variant={
-                                user.status === "active"
-                                  ? "success"
-                                  : "destructive"
-                              }
-                            >
-                              {user.status}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>{formatDateOnly(user.created_at)}</TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end space-x-2">
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => {
-                                  setSelectedUser(user);
-                                  setShowDetailsModal(true);
-                                }}
-                              >
-                                <Eye className="w-4 h-4" />
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleToggleStatus(user.id, user.status)}
-                              >
-                                {user.status === "active" ? (
-                                  <UserX className="w-4 h-4 text-orange-600" />
-                                ) : (
-                                  <UserCheck className="w-4 h-4 text-green-600" />
-                                )}
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDeleteUser(user.id)}
-                              >
-                                <Trash2 className="w-4 h-4 text-red-600" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
-              )}
-            </CardContent>
-          </Card>
-        )}
+              <Button onClick={() => setShowCreateModal(true)}>
+                <UserPlus className="w-4 h-4 mr-2" />
+                Create User
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              </div>
+            ) : (
+              <DataTable
+                columns={userColumns}
+                data={users.filter((u) => u.role === "user")}
+              />
+            )}
+          </CardContent>
+        </Card>
       </main>
 
       <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
@@ -395,106 +504,87 @@ const AdminDashboard = () => {
               </div>
             </div>
 
-            {/* Permissions Section */}
+            {/* Permissions Matrix */}
             <div className="space-y-3">
-              <div>
-                <Label className="text-base font-semibold">Permissions</Label>
-                <p className="text-sm text-gray-500 mt-1">
-                  Choose what this user can do in their assigned unit.
-                </p>
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <Label className="text-base font-semibold">Permissions Matrix</Label>
+                  <p className="text-sm text-gray-500 mt-1">
+                    Choose what this user can do across each resource in their assigned unit.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAllMatrixPermissions(true)}
+                  >
+                    Select All
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setAllMatrixPermissions(false)}
+                  >
+                    Clear All
+                  </Button>
+                </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                {/* Create Permission */}
-                <label className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.permissions.create}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        permissions: {
-                          ...formData.permissions,
-                          create: e.target.checked,
-                        },
-                      })
-                    }
-                    className="mt-0.5 rounded"
-                  />
-                  <div>
-                    <span className="text-sm font-medium">Create</span>
-                    <p className="text-xs text-gray-500">Add new records</p>
-                  </div>
-                </label>
-
-                {/* Read Permission */}
-                <label className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.permissions.read}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        permissions: {
-                          ...formData.permissions,
-                          read: e.target.checked,
-                        },
-                      })
-                    }
-                    className="mt-0.5 rounded"
-                  />
-                  <div>
-                    <span className="text-sm font-medium">Read</span>
-                    <p className="text-xs text-gray-500">
-                      View assigned records
-                    </p>
-                  </div>
-                </label>
-
-                {/* Update Permission */}
-                <label className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.permissions.update}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        permissions: {
-                          ...formData.permissions,
-                          update: e.target.checked,
-                        },
-                      })
-                    }
-                    className="mt-0.5 rounded"
-                  />
-                  <div>
-                    <span className="text-sm font-medium">Update</span>
-                    <p className="text-xs text-gray-500">
-                      Edit existing records
-                    </p>
-                  </div>
-                </label>
-
-                {/* Delete Permission */}
-                <label className="flex items-start space-x-3 p-3 border rounded-lg hover:bg-gray-50 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={formData.permissions.delete}
-                    onChange={(e) =>
-                      setFormData({
-                        ...formData,
-                        permissions: {
-                          ...formData.permissions,
-                          delete: e.target.checked,
-                        },
-                      })
-                    }
-                    className="mt-0.5 rounded"
-                  />
-                  <div>
-                    <span className="text-sm font-medium">Delete</span>
-                    <p className="text-xs text-gray-500">Remove records</p>
-                  </div>
-                </label>
+              <div className="overflow-hidden rounded-lg border border-slate-200">
+                <table className="w-full text-sm">
+                  <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                      <th className="px-4 py-3 text-left font-semibold tracking-wide text-xs">
+                        RESOURCE
+                      </th>
+                      {PERMISSION_OPERATIONS.map((operation) => (
+                        <th
+                          key={operation.key}
+                          className="px-3 py-3 text-left font-semibold tracking-wide text-xs"
+                        >
+                          <div>{operation.label}</div>
+                          <div className="mt-1 text-[11px] font-normal text-slate-400">
+                            {operation.description}
+                          </div>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {RESOURCE_ROWS.map((resource) => (
+                      <tr key={resource.key} className="border-t border-slate-200">
+                        <td className="px-4 py-3">
+                          <Badge
+                            variant="outline"
+                            className={`rounded-full font-semibold ${resource.badgeClass}`}
+                          >
+                            {resource.label}
+                          </Badge>
+                        </td>
+                        {PERMISSION_OPERATIONS.map((operation) => (
+                          <td key={operation.key} className="px-3 py-3">
+                            <input
+                              type="checkbox"
+                              checked={Boolean(
+                                formData.permissions?.[resource.key]?.[operation.key],
+                              )}
+                              onChange={(e) =>
+                                updatePermissionCell(
+                                  resource.key,
+                                  operation.key,
+                                  e.target.checked,
+                                )
+                              }
+                              className="h-5 w-5 rounded border-slate-300"
+                            />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
             <div className="flex justify-end space-x-2 pt-4">
@@ -545,13 +635,21 @@ const AdminDashboard = () => {
               <div>
                 <Label className="text-xs text-gray-500">Permissions</Label>
                 <div className="flex flex-wrap gap-2 mt-1">
-                  {Object.entries(selectedUser.permissions || {}).map(
-                    ([key, value]) =>
-                      value && (
-                        <Badge key={key} variant="outline">
-                          {key}
+                  {RESOURCE_ROWS.flatMap((resource) =>
+                    PERMISSION_OPERATIONS.map((operation) => {
+                      const hasPermission = Boolean(
+                        selectedUser.permissions?.resources?.[resource.key]?.[
+                          operation.key
+                        ],
+                      );
+                      if (!hasPermission) return null;
+
+                      return (
+                        <Badge key={`${resource.key}-${operation.key}`} variant="outline">
+                          {resource.label}: {operation.key}
                         </Badge>
-                      ),
+                      );
+                    }),
                   )}
                 </div>
               </div>

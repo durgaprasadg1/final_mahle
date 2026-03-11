@@ -1,6 +1,27 @@
 import jwt from "jsonwebtoken";
 import User from "../models/User.js";
 
+const RESOURCE_ALIASES = {
+  product: "product",
+  products: "product",
+  fracticl: "fracticl",
+  fractile: "fracticl",
+  fractiles: "fracticl",
+  tier: "tier",
+  tiers: "tier",
+  cell: "cells",
+  cells: "cells",
+  batch: "cells",
+  batches: "cells",
+};
+
+const normalizeResource = (resource) => {
+  const key = String(resource || "")
+    .trim()
+    .toLowerCase();
+  return RESOURCE_ALIASES[key] || null;
+};
+
 export const authenticate = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -59,13 +80,35 @@ export const authorizeUser = (req, res, next) => {
   next();
 };
 
-export const checkPermission = (permission) => {
+export const checkPermission = (permission, resourceResolver = null) => {
   return (req, res, next) => {
     if (req.user.role === "admin") {
       return next();
     }
 
     const userPermissions = req.user.permissions || {};
+    const resolvedResource = normalizeResource(
+      typeof resourceResolver === "function"
+        ? resourceResolver(req)
+        : resourceResolver,
+    );
+
+    if (resolvedResource) {
+      const resourcePermissions = userPermissions.resources?.[resolvedResource];
+      const isAllowed =
+        typeof resourcePermissions?.[permission] === "boolean"
+          ? resourcePermissions[permission]
+          : userPermissions[permission];
+
+      if (!isAllowed) {
+        return res.status(403).json({
+          success: false,
+          message: `You don't have permission to ${permission} ${resolvedResource}`,
+        });
+      }
+      return next();
+    }
+
     if (!userPermissions[permission]) {
       return res.status(403).json({
         success: false,

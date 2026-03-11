@@ -4,6 +4,70 @@ import { toast } from "react-toastify";
 
 const AuthContext = createContext(null);
 
+const RESOURCE_KEYS = ["product", "fracticl", "tier", "cells"];
+
+const normalizeCrud = (input = {}) => ({
+  create: Boolean(input.create ?? input.c),
+  read: Boolean(input.read ?? input.r),
+  update: Boolean(input.update ?? input.u),
+  delete: Boolean(input.delete ?? input.d),
+});
+
+const normalizePermissions = (permissionsInput) => {
+  if (!permissionsInput) {
+    const flatDefault = { create: false, read: true, update: false, delete: false };
+    return {
+      ...flatDefault,
+      resources: RESOURCE_KEYS.reduce((acc, key) => {
+        acc[key] = { ...flatDefault };
+        return acc;
+      }, {}),
+    };
+  }
+
+  let parsedInput = permissionsInput;
+  if (typeof permissionsInput === "string") {
+    try {
+      parsedInput = JSON.parse(permissionsInput);
+    } catch (error) {
+      const csv = permissionsInput.split(",").map((p) => p.trim());
+      parsedInput = {
+        create: csv.includes("create"),
+        read: csv.includes("read"),
+        update: csv.includes("update"),
+        delete: csv.includes("delete"),
+      };
+    }
+  }
+
+  const flat = normalizeCrud(parsedInput);
+  const matrixSource = parsedInput.resources || parsedInput.m || {};
+  const resources = RESOURCE_KEYS.reduce((acc, resource) => {
+    const row = matrixSource[resource] || matrixSource[resource[0]];
+    acc[resource] = row ? normalizeCrud(row) : { ...flat };
+    return acc;
+  }, {});
+
+  const aggregate = RESOURCE_KEYS.reduce(
+    (acc, resource) => {
+      acc.create = acc.create || resources[resource].create;
+      acc.read = acc.read || resources[resource].read;
+      acc.update = acc.update || resources[resource].update;
+      acc.delete = acc.delete || resources[resource].delete;
+      return acc;
+    },
+    { create: false, read: false, update: false, delete: false },
+  );
+
+  return {
+    create: flat.create || aggregate.create,
+    read: flat.read || aggregate.read,
+    update: flat.update || aggregate.update,
+    delete: flat.delete || aggregate.delete,
+    resources,
+  };
+};
+
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
@@ -26,15 +90,8 @@ export const AuthProvider = ({ children }) => {
       setToken(storedToken);
       try {
         const parsed = JSON.parse(storedUser);
-        // Normalize permissions if backend returned CSV string
-        if (parsed && parsed.permissions && typeof parsed.permissions === "string") {
-          const perms = parsed.permissions.split(",").map((p) => p.trim());
-          parsed.permissions = {
-            create: perms.includes("create"),
-            read: perms.includes("read"),
-            update: perms.includes("update"),
-            delete: perms.includes("delete"),
-          };
+        if (parsed && parsed.permissions) {
+          parsed.permissions = normalizePermissions(parsed.permissions);
         }
         setUser(parsed);
       } catch (e) {
@@ -48,6 +105,10 @@ export const AuthProvider = ({ children }) => {
     try {
       const response = await authAPI.login(credentials);
       const { user, token } = response.data.data;
+
+      if (user?.permissions) {
+        user.permissions = normalizePermissions(user.permissions);
+      }
 
       setUser(user);
       setToken(token);

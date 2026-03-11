@@ -36,7 +36,7 @@ const UserDashboard = () => {
     deleteProduct,
   } = useProducts();
 
-  const { batches, createBatches, updateBatch, deleteBatch } = useBatches();
+  const { batches, createBatches, deleteBatch } = useBatches();
 
   const {
     reportType,
@@ -55,6 +55,7 @@ const UserDashboard = () => {
     clearResults,
   } = useReports();
 
+  // Handlers
   const handleLogout = () => {
     logout();
     toast.info("Logged out successfully");
@@ -71,6 +72,7 @@ const UserDashboard = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Header */}
       <DashboardHeader
         user={user}
         onLogout={handleLogout}
@@ -78,10 +80,13 @@ const UserDashboard = () => {
       />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats Cards */}
         <StatsCards products={products} batches={batches} />
 
+        {/* Tab Navigation */}
         <TabNavigation activeTab={activeTab} onTabChange={setActiveTab} />
 
+        {/* Products Tab */}
         {activeTab === "products" && (
           <ProductsTab
             products={products}
@@ -97,18 +102,19 @@ const UserDashboard = () => {
           />
         )}
 
+        {/* Batches Tab */}
         {activeTab === "batches" && (
           <BatchesTab
             batches={batches}
             products={products}
             user={user}
             onCreateBatches={createBatches}
-            onUpdateBatch={updateBatch}
             onDeleteBatch={deleteBatch}
           />
         )}
       </main>
 
+      {/* Reports Modal */}
       <ReportsModal
         isOpen={showReportModal}
         onClose={handleCloseReports}

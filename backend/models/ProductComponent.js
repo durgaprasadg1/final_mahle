@@ -1,7 +1,7 @@
 import pool from "../config/database.js";
 
 class ProductComponent {
-  // ========== FRACTILES ==========
+// ---- Fractiles Ke Liye 
   
   static async createFractile(productId, fractileData) {
     const { name, count, description, cell_id } = fractileData;
@@ -85,7 +85,7 @@ class ProductComponent {
     await pool.query(query, [productId]);
   }
 
-  // ========== CELLS ==========
+  // cells ke Liye ...
   
   static async createCell(productId, cellData) {
     const { name, count, description, tier_id } = cellData;
@@ -169,7 +169,7 @@ class ProductComponent {
     await pool.query(query, [productId]);
   }
 
-  // ========== TIERS ==========
+  // Tiers ke Liye ...
   
   static async createTier(productId, tierData) {
     const { name, count, description } = tierData;
@@ -273,7 +273,7 @@ class ProductComponent {
     ]);
   }
 
-  // Replace all components for a product (used in updates)
+  // Updation ke time kaa replacement
   static async replaceAllComponents(productId, components) {
     const { fractiles, cells, tiers } = components;
 

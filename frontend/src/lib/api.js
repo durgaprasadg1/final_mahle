@@ -75,6 +75,7 @@ export const unitAPI = {
   getById: (id) => api.get(`/units/${id}`),
   create: (unitData) => api.post("/units", unitData),
   update: (id, unitData) => api.put(`/units/${id}`, unitData),
+  delete: (id) => api.delete(`/units/${id}`),
 };
 
 // Product API
@@ -110,6 +111,7 @@ export const templateAPI = {
 // Batch API
 export const batchAPI = {
   create: (batchData) => api.post("/batches", batchData),
+  createBulk: (batches) => api.post("/batches/bulk", { batches }),
   getAll: (params) => api.get("/batches", { params }),
   getById: (id) => api.get(`/batches/${id}`),
   update: (id, batchData) => api.put(`/batches/${id}`, batchData),

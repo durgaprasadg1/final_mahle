@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -12,14 +12,6 @@ import {
   CardTitle,
 } from "../../components/ui/card";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "../../components/ui/table";
-import {
   Dialog,
   DialogContent,
   DialogHeader,
@@ -29,6 +21,7 @@ import {
 import { Badge } from "../../components/ui/badge";
 import { toast } from "react-toastify";
 import { Clock, Plus, Edit, Trash2, ArrowLeft } from "lucide-react";
+import { DataTable } from "../../components/user/table";
 
 const ShiftDashboard = ({ onBack }) => {
   const [shifts, setShifts] = useState([]);
@@ -218,6 +211,114 @@ const ShiftDashboard = ({ onBack }) => {
     return slots;
   };
 
+  const shiftColumns = useMemo(
+    () => [
+      {
+        id: "shift_name",
+        header: "Shift Name",
+        cell: ({ row }) => {
+          const shift = row.original;
+          return (
+            <div>
+              <div className="font-medium">{shift.name}</div>
+              {shift.description && (
+                <div className="text-sm text-gray-500">{shift.description}</div>
+              )}
+            </div>
+          );
+        },
+      },
+      {
+        id: "time",
+        header: "Time",
+        cell: ({ row }) => {
+          const shift = row.original;
+          return (
+            <div>
+              {shift.startTime} - {shift.endTime}
+            </div>
+          );
+        },
+      },
+      {
+        id: "duration",
+        header: "Duration",
+        cell: ({ row }) => {
+          const shift = row.original;
+          const duration = calculateDuration(shift.startTime, shift.endTime);
+          return duration.includes("-")
+            ? `(Overnight Shift) ${duration}`
+            : duration;
+        },
+      },
+      {
+        accessorKey: "timeInterval",
+        header: "Interval",
+        cell: ({ getValue }) => <Badge variant="outline">{getValue()}</Badge>,
+      },
+      {
+        accessorKey: "isActive",
+        header: "Status",
+        cell: ({ getValue }) => (
+          <Badge
+            variant="outline"
+            className={
+              getValue()
+                ? "bg-green-50 text-green-700 border-green-200"
+                : "bg-red-50 text-red-700 border-red-200"
+            }
+          >
+            {getValue() ? "Active" : "Inactive"}
+          </Badge>
+        ),
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => {
+          const shift = row.original;
+          return (
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleToggleStatus(shift.id)}
+                className={
+                  shift.isActive
+                    ? "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
+                    : "text-green-600 hover:text-green-700 hover:bg-green-50"
+                }
+              >
+                <IoToggle
+                  className={`w-7 h-7 transition-transform duration-200 ${
+                    shift.isActive ? "" : "rotate-180 opacity-70"
+                  }`}
+                />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleEditShift(shift)}
+                className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+              >
+                <Edit className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => handleDeleteShift(shift.id)}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              >
+                <Trash2 className="w-4 h-4" />
+              </Button>
+            </div>
+          );
+        },
+      },
+    ],
+    [],
+  );
+
   const timeSlotsPreview = generateTimeSlots(
     formData.startTime,
     formData.endTime,
@@ -321,99 +422,7 @@ const ShiftDashboard = ({ onBack }) => {
                 No shifts created yet. Click "Create New Shift" to get started.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Shift Name</TableHead>
-                      <TableHead>Time</TableHead>
-                      <TableHead>Duration</TableHead>
-                      <TableHead>Interval</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead>Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {shifts.map((shift) => (
-                      <TableRow key={shift.id}>
-                        <TableCell>
-                          <div className="font-medium">{shift.name}</div>
-                          {shift.description && (
-                            <div className="text-sm text-gray-500">
-                              {shift.description}
-                            </div>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {shift.startTime} - {shift.endTime}
-                        </TableCell>
-                        <TableCell>
-                          {calculateDuration(shift.startTime, shift.endTime)  < 0 ? `(Overnight Shift) ${calculateDuration(shift.startTime, shift.endTime)}` : calculateDuration(shift.startTime, shift.endTime)}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">{shift.timeInterval}</Badge>
-                        </TableCell>
-                        {/* 1. Status Column */}
-                        <TableCell>
-                          <Badge
-                            variant="outline"
-                            className={
-                              shift.isActive
-                                ? "bg-green-50 text-green-700 border-green-200"
-                                : "bg-red-50 text-red-700 border-red-200"
-                            }
-                          >
-                            {shift.isActive ? "Active" : "Inactive"}
-                          </Badge>
-                        </TableCell>
-
-                        {/* 2. Actions Column */}
-                        <TableCell>
-                          <div className="flex items-center space-x-2">
-                            {/* Toggle Status Button */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleToggleStatus(shift.id)}
-                              className={
-                                shift.isActive
-                                  ? "text-green-600 hover:text-green-700 hover:bg-green-50"
-                                  : "text-red-600 hover:text-red-700 hover:bg-red-50"
-                              }
-                            >
-                              <IoToggle
-                                className={`w-7 h-7 transition-transform duration-200 ${
-                                  shift.isActive ? "" : "rotate-180 opacity-70"
-                                }`}
-                              />
-                            </Button>
-
-                            {/* Edit Button */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleEditShift(shift)}
-                              className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                            >
-                              <Edit className="w-4 h-4" />
-                            </Button>
-
-                            {/* Delete Button */}
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => handleDeleteShift(shift.id)}
-                              className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
+              <DataTable columns={shiftColumns} data={shifts} />
             )}
           </CardContent>
         </Card>
@@ -512,7 +521,6 @@ const ShiftDashboard = ({ onBack }) => {
                       <option value="15minutes">15 Minutes</option>
                     </Select>
                   </div>
-                 
                 </div>
 
                 <div className="flex items-center space-x-2 pt-2">

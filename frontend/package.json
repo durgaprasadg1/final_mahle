@@ -9,9 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@tanstack/react-table": "^8.21.3",
     "axios": "^1.6.5",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
+    "jspdf": "^2.5.2",
+    "jspdf-autotable": "^3.8.4",
     "lucide-react": "^0.303.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

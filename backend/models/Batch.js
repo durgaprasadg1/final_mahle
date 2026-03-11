@@ -1,6 +1,69 @@
 import pool from "../config/database.js";
 
 class Batch {
+  static async createBulk(batchesData) {
+    if (!batchesData || batchesData.length === 0) {
+      return [];
+    }
+    const placeholders = [];
+    const values = [];
+    let paramCount = 1;
+  
+    batchesData.forEach((batch, index) => {
+      const {
+        product_id,
+        unit_id,
+        quantity_produced,
+        shift,
+        batch_in_shift,
+        batch_date,
+        start_time,
+        end_time,
+        status,
+        notes,
+        had_delay,
+        delay_reason,
+        created_by,
+      } = batch;
+  
+      //($1, $2, $3, ..., $13) ye placeholder rhte
+      const rowPlaceholders = [];
+      for (let i = 0; i < 13; i++) {
+        rowPlaceholders.push(`$${paramCount++}`);
+      }
+      placeholders.push(`(${rowPlaceholders.join(", ")})`);
+  
+      // Add values in same order
+      values.push(
+        product_id,
+        unit_id,
+        quantity_produced,
+        shift,
+        batch_in_shift,
+        batch_date || new Date().toISOString().split("T")[0],
+        start_time,
+        end_time,
+        status || "completed",
+        notes || null,
+        had_delay || "no",
+        delay_reason || null,
+        created_by
+      );
+    });
+  
+    const query = `
+      INSERT INTO batches (
+        product_id, unit_id, quantity_produced, shift, batch_in_shift,
+        batch_date, start_time, end_time, status, notes,
+        had_delay, delay_reason, created_by
+      )
+      VALUES ${placeholders.join(", ")}
+      RETURNING *
+    `;
+  
+    const result = await pool.query(query, values);
+    return result.rows;
+  }
   static async create(batchData) {
     const {
       product_id,
@@ -90,9 +153,9 @@ class Batch {
       LEFT JOIN products p ON b.product_id = p.id
       LEFT JOIN units ON b.unit_id = units.id
       LEFT JOIN users ON b.created_by = users.id
-      WHERE 1=1
+      WHERE 1=1  
     `;
-
+ // need to dynamically add filters to the query kyuki hmne wha 1=1 which is always true, to make it easier to append AND conditions without worrying about whether it's the first condition or not. Then we check for each possible filter and if it's present, we append the appropriate condition to the query and add the value to the values array. Finally, we execute the query with the accumulated values.
     const values = [];
     let paramCount = 1;
 
@@ -225,7 +288,7 @@ class Batch {
     return result.rows[0];
   }
 
-  // Get statistics for a unit
+  // ek unit ke stats nikalne ke lae
   static async getUnitStatistics(unitId, dateFrom, dateTo) {
     const query = `
       SELECT 
@@ -242,7 +305,7 @@ class Batch {
     return result.rows[0];
   }
 
-  // Get statistics by shift
+  // ek unit ke stats nikalne ke lae
   static async getShiftStatistics(unitId, dateFrom, dateTo) {
     const query = `
       SELECT 
@@ -266,7 +329,7 @@ class Batch {
     return result.rows;
   }
 
-  // Get next batch number for a specific product in a shift on a specific date
+//  shift me next batch number dene ke liye kaam
   static async getNextBatchInShift(productId, shift, date = null) {
     const queryDate = date || new Date().toISOString().split("T")[0];
 

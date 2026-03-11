@@ -81,6 +81,12 @@ class Unit {
     const result = await pool.query(query, values);
     return result.rows[0];
   }
+
+  static async delete(id) {
+    const query = "DELETE FROM units WHERE id = $1 RETURNING *";
+    const result = await pool.query(query, [id]);
+    return result.rows[0];
+  }
 }
 
 export default Unit;
