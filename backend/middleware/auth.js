@@ -4,15 +4,15 @@ import User from "../models/User.js";
 const RESOURCE_ALIASES = {
   product: "product",
   products: "product",
-  fracticl: "fracticl",
-  fractile: "fracticl",
-  fractiles: "fracticl",
+  fracticle: "fracticle",
+  fractile: "fracticle",
+  fractiles: "fracticle",
   tier: "tier",
   tiers: "tier",
   cell: "cells",
   cells: "cells",
-  batch: "cells",
-  batches: "cells",
+  batch: "batch",
+  batches: "batch",
 };
 
 const normalizeResource = (resource) => {

@@ -3,7 +3,7 @@ import pool from "../config/database.js";
 class User {
   static CRUD_OPERATIONS = ["create", "read", "update", "delete"];
 
-  static RESOURCE_KEYS = ["product", "fracticl", "tier", "cells", "batch"];
+  static RESOURCE_KEYS = ["product", "fracticle", "tier", "cells", "batch"];
 
   static RESOURCE_ALIASES = {
     product: "product",
