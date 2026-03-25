@@ -3,20 +3,26 @@ import bcrypt from "bcryptjs";
 class User {
   static CRUD_OPERATIONS = ["create", "read", "update", "delete"];
 
-  static RESOURCE_KEYS = ["product", "fracticl", "tier", "cells", "batch"];
+  static RESOURCE_KEYS = ["product", "fracticle", "tier", "cells", "batch", "planning"];
 
   static RESOURCE_ALIASES = {
     product: "product",
     products: "product",
-    fracticl: "fracticl",
-    fractile: "fracticl",
-    fractiles: "fracticl",
+    fracticl: "fracticle",
+    fracticle: "fracticle",
+    fractile: "fracticle",
+    fractiles: "fracticle",
     tier: "tier",
     tiers: "tier",
     cell: "cells",
     cells: "cells",
     batch: "batch",
     batches: "batch",
+    planning: "planning",
+    productionplanning: "planning",
+    production_planning: "planning",
+    productionplan: "planning",
+    productionplans: "planning",
   };
 
   static normalizeResourceKey(resource) {

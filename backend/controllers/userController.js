@@ -64,6 +64,7 @@ class UserController {
             tier: { create: false, read: false, update: false, delete: false },
             cells: { create: false, read: false, update: false, delete: false },
             batch: { create: false, read: false, update: false, delete: false },
+            planning: { create: false, read: false, update: false, delete: false },
           },
         };
       }

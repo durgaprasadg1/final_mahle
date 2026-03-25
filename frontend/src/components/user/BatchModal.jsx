@@ -24,6 +24,10 @@ export const BatchModal = ({
   onSubmit,
   products,
   batches,
+  productionPlans = [],
+  planDate = null,
+  isEditMode = false,
+  initialBatch = null,
 }) => {
   const [batchForm, setBatchForm] = useState({
     product_id: "",
@@ -50,6 +54,72 @@ export const BatchModal = ({
   const getProductLabel = (product) =>
     `${product.name} (${formatProductType(product.type)})`;
 
+  const [timeValidationError, setTimeValidationError] = useState("");
+
+  const validateTimeInShiftRange = (shift, startTime, endTime) => {
+    if (!shift || !startTime || !endTime) {
+      return { valid: true };
+    }
+
+    const configuredShift =
+      (availableShifts || []).find((item) => item.backendShift === shift) ||
+      DEFAULT_SHIFT_CONFIGS.find((item) => item.backendShift === shift);
+
+    if (!configuredShift?.startTime || !configuredShift?.endTime) {
+      return { valid: true };
+    }
+
+    const range = {
+      start: configuredShift.startTime,
+      end: configuredShift.endTime,
+    };
+
+    const timeToMinutes = (time) => {
+      const [hour, min] = time.substring(0, 5).split(":").map(Number);
+      return hour * 60 + min;
+    };
+
+    const startMin = timeToMinutes(startTime);
+    const endMin = timeToMinutes(endTime);
+    const shiftStartMin = timeToMinutes(range.start);
+    const shiftEndMin = timeToMinutes(range.end);
+    const crossesMidnight = shiftEndMin <= shiftStartMin;
+
+    const isInRange = (timeMin) => {
+      if (!crossesMidnight) {
+        return timeMin >= shiftStartMin && timeMin <= shiftEndMin;
+      }
+      return timeMin >= shiftStartMin || timeMin <= shiftEndMin;
+    };
+
+    const startValid = isInRange(startMin);
+    const endValid = isInRange(endMin);
+
+    if (!startValid || !endValid) {
+      return {
+        valid: false,
+        message: `Time slot ${startTime} - ${endTime} must be within ${range.start} - ${range.end}`,
+      };
+    }
+
+    return { valid: true };
+  };
+
+  const getShiftRangeLabel = (shiftType) => {
+    const configuredShift =
+      (availableShifts || []).find((item) => item.backendShift === shiftType) ||
+      DEFAULT_SHIFT_CONFIGS.find((item) => item.backendShift === shiftType);
+
+    if (!configuredShift?.startTime || !configuredShift?.endTime) {
+      return "";
+    }
+
+    const [startHour, startMin] = configuredShift.startTime.split(":").map(Number);
+    const [endHour, endMin] = configuredShift.endTime.split(":").map(Number);
+    const crossesMidnight = endHour * 60 + endMin <= startHour * 60 + startMin;
+    return `${configuredShift.startTime} - ${configuredShift.endTime}${crossesMidnight ? " (crosses midnight)" : ""}`;
+  };
+
   const filteredProducts = useMemo(() => {
     const query = productSearch.trim().toLowerCase();
     const source = products || [];
@@ -65,6 +135,86 @@ export const BatchModal = ({
       })
       .slice(0, 8);
   }, [products, productSearch]);
+
+  const effectivePlanDate = planDate || new Date().toISOString().split("T")[0];
+
+  const normalizeDateKey = (value) => {
+    if (!value) return "";
+    const text = String(value);
+    return text.length >= 10 ? text.substring(0, 10) : text;
+  };
+
+  const planningProgress = useMemo(() => {
+    const selectedProductId = String(batchForm.product_id || "");
+    const selectedShift = batchForm.shift;
+
+    if (!selectedProductId || !selectedShift) {
+      return null;
+    }
+
+    const targetDateKey = normalizeDateKey(effectivePlanDate);
+
+    const matchingPlanForDate = (productionPlans || []).find((plan) => {
+      return (
+        String(plan.product_id) === selectedProductId &&
+        String(plan.shift) === String(selectedShift) &&
+        normalizeDateKey(plan.plan_date) === targetDateKey
+      );
+    });
+
+    const matchingPlan =
+      matchingPlanForDate ||
+      (productionPlans || []).find(
+        (plan) =>
+          String(plan.product_id) === selectedProductId &&
+          String(plan.shift) === String(selectedShift),
+      );
+
+    if (!matchingPlan) {
+      return null;
+    }
+
+    const producedQuantity = (batches || []).reduce((total, batch) => {
+      const batchDateKey = batch.batch_date
+        ? String(batch.batch_date).substring(0, 10)
+        : batch.created_at
+          ? new Date(batch.created_at).toISOString().split("T")[0]
+          : "";
+
+      if (
+        String(batch.product_id) === selectedProductId &&
+        String(batch.shift) === String(selectedShift) &&
+        batchDateKey === effectivePlanDate
+      ) {
+        return total + Number(batch.quantity_produced || 0);
+      }
+
+      return total;
+    }, 0);
+
+    const enteredQuantity = Number(batchForm.quantity_produced || 0);
+    const selectedSlotCount = selectedBatchSlots.length;
+    const previewAddition =
+      enteredQuantity > 0
+        ? enteredQuantity * (selectedSlotCount > 0 ? selectedSlotCount : 1)
+        : 0;
+    const producedWithCurrentEntry = producedQuantity + previewAddition;
+
+    const targetQuantity = Number(matchingPlan.target_quantity || 0);
+    return {
+      target: targetQuantity,
+      produced: producedWithCurrentEntry,
+      remaining: targetQuantity - producedWithCurrentEntry,
+    };
+  }, [
+    batchForm.product_id,
+    batchForm.shift,
+    batchForm.quantity_produced,
+    selectedBatchSlots.length,
+    productionPlans,
+    effectivePlanDate,
+    batches,
+  ]);
 
   // Load shift configurations on mount
   useEffect(() => {
@@ -98,6 +248,7 @@ export const BatchModal = ({
     setSelectedShiftConfigId("");
     setProductSearch("");
     setShowProductSuggestions(false);
+    setTimeValidationError("");
   };
 
   const copyFromPreviousBatch = (batch) => {
@@ -193,6 +344,27 @@ export const BatchModal = ({
     return DEFAULT_SHIFT_CONFIGS;
   };
 
+  const getEditShiftOptions = () => {
+    const shiftChoices = getShiftChoices();
+    const optionsByShiftType = new Map();
+
+    shiftChoices.forEach((shiftConfig) => {
+      if (shiftConfig?.backendShift && !optionsByShiftType.has(shiftConfig.backendShift)) {
+        optionsByShiftType.set(shiftConfig.backendShift, shiftConfig);
+      }
+    });
+
+    if (optionsByShiftType.size === 0) {
+      DEFAULT_SHIFT_CONFIGS.forEach((shiftConfig) => {
+        if (!optionsByShiftType.has(shiftConfig.backendShift)) {
+          optionsByShiftType.set(shiftConfig.backendShift, shiftConfig);
+        }
+      });
+    }
+
+    return Array.from(optionsByShiftType.values());
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -205,9 +377,45 @@ export const BatchModal = ({
       toast.error("Quantity produced must be at least 1");
       return;
     }
+
+    // For edit mode, validate time inputs
+    if (isEditMode) {
+      if (!batchForm.start_time || !batchForm.end_time) {
+        toast.error("Please provide start and end times");
+        return;
+      }
+      if (batchForm.had_delay === "yes" && !batchForm.delay_reason.trim()) {
+        toast.error("Please provide a reason for the delay");
+        return;
+      }
+
+      const timeValidation = validateTimeInShiftRange(
+        batchForm.shift,
+        batchForm.start_time,
+        batchForm.end_time,
+      );
+      if (!timeValidation.valid) {
+        toast.error(timeValidation.message);
+        return;
+      }
+
+      // Call onSubmit with batch data for updating
+      await onSubmit({
+        ...batchForm,
+        quantity_produced: qty,
+      });
+    } else {
+      // Create mode - validate slots
     if (selectedBatchSlots.length === 0) {
       toast.error("Please select at least one time slot");
       return;
+    }
+    if (batchForm.had_delay === "yes" && !batchForm.delay_reason.trim()) {
+      toast.error("Please provide a reason for the delay");
+      return;
+    }
+
+    await onSubmit(batchForm, selectedBatchSlots);
     }
     if (batchForm.had_delay === "yes" && !batchForm.delay_reason.trim()) {
       toast.error("Please provide a reason for the delay");
@@ -301,6 +509,37 @@ export const BatchModal = ({
   const previousBatchesCount = batchForm.product_id
     ? getPreviousBatchesForProduct(batches, batchForm.product_id).length
     : 0;
+
+  const availableSlots = useMemo(() => {
+    if (isEditMode) {
+      return [];
+    }
+
+    const today = new Date().toISOString().split("T")[0];
+    return batchTimeSlots.filter((slot) => {
+      const isCurrentSlotSelected = selectedBatchSlots.includes(slot.value);
+      if (isCurrentSlotSelected) return true;
+
+      const isUsed = batches.some((batch) => {
+        const batchDate = batch.created_at
+          ? new Date(batch.created_at).toISOString().split("T")[0]
+          : today;
+
+        const normStartTime = (batch.start_time || "").substring(0, 5);
+        const normEndTime = (batch.end_time || "").substring(0, 5);
+
+        return (
+          String(batch.product_id) === String(batchForm.product_id) &&
+          String(batch.shift || "") === String(batchForm.shift || "") &&
+          normStartTime === (slot.startTime || "").substring(0, 5) &&
+          normEndTime === (slot.endTime || "").substring(0, 5) &&
+          batchDate === today
+        );
+      });
+
+      return !isUsed;
+    });
+  }, [isEditMode, batchTimeSlots, selectedBatchSlots, batches, batchForm.product_id, batchForm.shift]);
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
@@ -419,8 +658,20 @@ export const BatchModal = ({
             )}
           </div>
 
-          {/* Quantity */}
+          {/* Expected + Quantity */}
           <div className="space-y-2">
+            {!isEditMode && (
+              <div className="space-y-1">
+                <Label htmlFor="expectedQuantity">Expected Quantity</Label>
+                <Input
+                  id="expectedQuantity"
+                  type="number"
+                  value={planningProgress ? String(planningProgress.target) : ""}
+                  placeholder="No target configured for selected product/shift"
+                  readOnly
+                />
+              </div>
+            )}
             <div className="flex items-center gap-2">
               <Label htmlFor="quantity">Quantity Produced *</Label>
               {usePreviousBatch && (
@@ -442,6 +693,13 @@ export const BatchModal = ({
               }
               required
             />
+            {!isEditMode && planningProgress && (
+              <div className="text-xs bg-violet-50 border border-violet-200 rounded-md p-2 text-violet-800">
+                <span className="font-medium">Expected:</span> {planningProgress.target} |{" "}
+                <span className="font-medium">Produced:</span> {planningProgress.produced} |{" "}
+                <span className="font-medium">Remaining:</span> {planningProgress.remaining}
+              </div>
+            )}
           </div>
 
           {/* Shift Selection */}
@@ -545,9 +803,152 @@ export const BatchModal = ({
                   </label>
                 ))}
             </div>
-            {batchTimeSlots.length === 0 && (
-              <p className="text-sm text-gray-500">
-                No available slots for this product today.
+          )}
+
+          {/* For Edit Mode: Show simple time and shift inputs */}
+          {isEditMode && (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="editShift">Shift *</Label>
+                <Select
+                  id="editShift"
+                  value={batchForm.shift}
+                  onChange={(e) => {
+                    const newShift = e.target.value;
+                    const nextForm = { ...batchForm, shift: newShift };
+                    setBatchForm(nextForm);
+
+                    if (nextForm.start_time && nextForm.end_time) {
+                      const validation = validateTimeInShiftRange(
+                        newShift,
+                        nextForm.start_time,
+                        nextForm.end_time,
+                      );
+                      setTimeValidationError(
+                        validation.valid ? "" : validation.message,
+                      );
+                    } else {
+                      setTimeValidationError("");
+                    }
+                  }}
+                  required
+                >
+                  {getEditShiftOptions().map((shiftConfig) => (
+                    <option
+                      key={`edit-${shiftConfig.id || shiftConfig.backendShift}`}
+                      value={shiftConfig.backendShift}
+                    >
+                      {getShiftLabel(shiftConfig)}
+                    </option>
+                  ))}
+                </Select>
+                <p className="text-xs text-gray-500">
+                  Valid time range: {getShiftRangeLabel(batchForm.shift)}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="editStartTime">Start Time *</Label>
+                  <Input
+                    id="editStartTime"
+                    type="time"
+                    value={batchForm.start_time}
+                    onChange={(e) => {
+                      const newStartTime = e.target.value;
+                      const nextForm = { ...batchForm, start_time: newStartTime };
+                      setBatchForm(nextForm);
+
+                      if (nextForm.end_time) {
+                        const validation = validateTimeInShiftRange(
+                          nextForm.shift,
+                          newStartTime,
+                          nextForm.end_time,
+                        );
+                        setTimeValidationError(
+                          validation.valid ? "" : validation.message,
+                        );
+                      } else {
+                        setTimeValidationError("");
+                      }
+                    }}
+                    className={timeValidationError ? "border-red-500" : ""}
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="editEndTime">End Time *</Label>
+                  <Input
+                    id="editEndTime"
+                    type="time"
+                    value={batchForm.end_time}
+                    onChange={(e) => {
+                      const newEndTime = e.target.value;
+                      const nextForm = { ...batchForm, end_time: newEndTime };
+                      setBatchForm(nextForm);
+
+                      if (nextForm.start_time) {
+                        const validation = validateTimeInShiftRange(
+                          nextForm.shift,
+                          nextForm.start_time,
+                          newEndTime,
+                        );
+                        setTimeValidationError(
+                          validation.valid ? "" : validation.message,
+                        );
+                      } else {
+                        setTimeValidationError("");
+                      }
+                    }}
+                    className={timeValidationError ? "border-red-500" : ""}
+                    required
+                  />
+                </div>
+              </div>
+              {timeValidationError && (
+                <p className="text-sm text-red-600">{timeValidationError}</p>
+              )}
+            </>
+          )}
+
+          {/* Time Slot Selection - Only show in create mode */}
+          {!isEditMode && (
+            <div className="space-y-2">
+              <Label>Time Slot *</Label>
+              <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-64 overflow-y-auto bg-gray-50">
+                {availableSlots.map((slot) => (
+                    <label
+                      key={slot.value}
+                      className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${
+                        selectedBatchSlots.includes(slot.value)
+                          ? "border-primary bg-primary/10"
+                          : "border-gray-200 hover:border-gray-300"
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={selectedBatchSlots.includes(slot.value)}
+                        onChange={() => {
+                          setSelectedBatchSlots((prev) =>
+                            prev.includes(slot.value)
+                              ? prev.filter((v) => v !== slot.value)
+                              : [...prev, slot.value],
+                          );
+                        }}
+                        className="w-4 h-4 cursor-pointer"
+                      />
+                      <span className="text-sm font-medium">{slot.label}</span>
+                    </label>
+                  ))}
+              </div>
+              {availableSlots.length === 0 && (
+                <p className="text-sm text-gray-500">
+                  No available slots for this product and shift today.
+                </p>
+              )}
+              <p className="text-xs text-gray-500">
+                Slot list is auto-generated from admin shift timing and
+                interval.
               </p>
             )}
             <p className="text-xs text-gray-500">
