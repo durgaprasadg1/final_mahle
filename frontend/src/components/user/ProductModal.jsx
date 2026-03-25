@@ -9,9 +9,7 @@ import { Badge } from "../ui/badge";
 import { toast } from "react-toastify";
 import { formatProductType } from "../../lib/utils";
 
-/**
- * Product Modal Component for Create/Edit
- */
+
 export const ProductModal = ({
   isOpen,
   onClose,

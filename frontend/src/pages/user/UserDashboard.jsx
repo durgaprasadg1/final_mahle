@@ -36,7 +36,7 @@ const UserDashboard = () => {
     deleteProduct,
   } = useProducts();
 
-  const { batches, createBatches, deleteBatch } = useBatches();
+  const { batches, createBatches, updateBatch, deleteBatch } = useBatches();
 
   const {
     reportType,
@@ -103,6 +103,7 @@ const UserDashboard = () => {
             products={products}
             user={user}
             onCreateBatches={createBatches}
+            onUpdateBatch={updateBatch}
             onDeleteBatch={deleteBatch}
           />
         )}

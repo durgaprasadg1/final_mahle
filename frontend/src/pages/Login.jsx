@@ -97,10 +97,10 @@ const Login = () => {
               )}
             </Button>
           </form>
-          <div className="mt-6 text-center text-sm text-muted-foreground">
+          {/* <div className="mt-6 text-center text-sm text-muted-foreground">
             <p>Demo Credentials:</p>
             <p className="font-medium">Admin: admin@mahle.com / admin123</p>
-          </div>
+          </div> */}
         </CardContent>
       </Card>
     </div>

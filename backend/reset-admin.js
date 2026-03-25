@@ -4,14 +4,14 @@ import pool from "./config/database.js";
 
 async function resetAdminPassword() {
   try {
-    console.log("🔐 Generating bcrypt hash for password: admin123");
+    console.log("Generating bcrypt hash for password: admin123");
 
     const password = "admin123";
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    console.log("✓ Hash generated:", hashedPassword);
+    console.log("Hash generated:", hashedPassword);
     console.log("");
-    console.log("🔄 Updating admin user password in database...");
+    console.log(" Updating admin user password in database...");
 
     const result = await pool.query(
       `UPDATE users 
@@ -22,7 +22,7 @@ async function resetAdminPassword() {
     );
 
     if (result.rows.length > 0) {
-      console.log("✓ Admin password updated successfully!");
+      console.log(" Admin password updated successfully!");
       console.log("");
       console.log("   Login Credentials:");
       console.log("   Email: admin@mahle.com");
@@ -45,7 +45,7 @@ async function resetAdminPassword() {
         ],
       );
 
-      console.log("✓ Admin user created successfully!");
+      console.log("Admin user created successfully!");
       console.log("Login Credentials:");
       console.log("Email: admin@mahle.com");
       console.log("Password: admin123");
@@ -53,7 +53,7 @@ async function resetAdminPassword() {
 
     process.exit(0);
   } catch (error) {
-    console.error("❌ Error:", error.message);
+    console.error("Error:", error.message);
     process.exit(1);
   }
 }

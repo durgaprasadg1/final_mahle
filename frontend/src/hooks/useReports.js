@@ -2,7 +2,7 @@ import { useState } from "react";
 import { batchAPI } from "../lib/api";
 import { toast } from "react-toastify";
 import { formatDateOnly } from "../lib/utils";
-import jsPDF from "jspdf";
+import {jsPDF} from "jspdf";
 import autoTable from "jspdf-autotable";
 
 /**
