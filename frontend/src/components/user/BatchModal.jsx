@@ -748,63 +748,6 @@ export const BatchModal = ({
             </div>
           </div>
 
-          {/* Time Slot Selection */}
-          <div className="space-y-2">
-            <Label>Time Slot *</Label>
-            <div className="grid grid-cols-2 gap-2 p-3 border rounded-md max-h-64 overflow-y-auto bg-gray-50">
-              {batchTimeSlots
-                .filter((slot) => {
-                  const isCurrentSlotSelected = selectedBatchSlots.includes(
-                    slot.value,
-                  );
-                  if (isCurrentSlotSelected) return true;
-
-                  const today = new Date().toISOString().split("T")[0];
-                  const isUsed = batches.some((b) => {
-                    const batchDate = b.created_at
-                      ? new Date(b.created_at).toISOString().split("T")[0]
-                      : today;
-
-                    const normStartTime = (b.start_time || "").substring(0, 5);
-                    const normEndTime = (b.end_time || "").substring(0, 5);
-
-                    return (
-                      String(b.product_id) === String(batchForm.product_id) &&
-                      normStartTime ===
-                        (slot.startTime || "").substring(0, 5) &&
-                      normEndTime === (slot.endTime || "").substring(0, 5) &&
-                      batchDate === today
-                    );
-                  });
-                  return !isUsed;
-                })
-                .map((slot) => (
-                  <label
-                    key={slot.value}
-                    className={`flex items-center gap-2 p-2 rounded border cursor-pointer transition-colors ${
-                      selectedBatchSlots.includes(slot.value)
-                        ? "border-primary bg-primary/10"
-                        : "border-gray-200 hover:border-gray-300"
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={selectedBatchSlots.includes(slot.value)}
-                      onChange={() => {
-                        setSelectedBatchSlots((prev) =>
-                          prev.includes(slot.value)
-                            ? prev.filter((v) => v !== slot.value)
-                            : [...prev, slot.value],
-                        );
-                      }}
-                      className="w-4 h-4 cursor-pointer"
-                    />
-                    <span className="text-sm font-medium">{slot.label}</span>
-                  </label>
-                ))}
-            </div>
-          )}
-
           {/* For Edit Mode: Show simple time and shift inputs */}
           {isEditMode && (
             <>
@@ -950,11 +893,8 @@ export const BatchModal = ({
                 Slot list is auto-generated from admin shift timing and
                 interval.
               </p>
-            )}
-            <p className="text-xs text-gray-500">
-              Slot list is auto-generated from admin shift timing and interval.
-            </p>
-          </div>
+            </div>
+          )}
 
           {/* Notes */}
           <div className="space-y-2">

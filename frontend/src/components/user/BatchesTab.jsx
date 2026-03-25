@@ -8,7 +8,7 @@ import {
 } from "../ui/card";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Edit } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { formatDateOnly } from "../../lib/utils";
 import { getCreatorName } from "../../utils/batchUtils";
@@ -45,9 +45,12 @@ export const BatchesTab = ({
   products,
   user,
   onCreateBatches,
+  onUpdateBatch,
   onDeleteBatch,
 }) => {
   const [showBatchModal, setShowBatchModal] = useState(false);
+  const [isEditMode, setIsEditMode] = useState(false);
+  const [editingBatch, setEditingBatch] = useState(null);
   const [delayDialogBatch, setDelayDialogBatch] = useState(null);
   const [showPlanningDialog, setShowPlanningDialog] = useState(false);
   const [savingPlan, setSavingPlan] = useState(false);
@@ -108,15 +111,6 @@ export const BatchesTab = ({
   }, [todayDate, canViewPlanningTargets]);
 
   const handleBatchSubmit = async (batchFormData, selectedSlots) => {
-<<<<<<< Updated upstream
-    // Yha pe apne ko  batch createHone ke phle batches timing kaa array bnana hai
-    const result = await onCreateBatches(batchFormData, selectedSlots);
-    if (result.createdCount > 0) {
-      setShowBatchModal(false);
-    }
-  };
-
-=======
     if (isEditMode && editingBatch) {
       // Edit mode - update single batch
       const success = await onUpdateBatch(editingBatch.id, {
@@ -208,8 +202,6 @@ export const BatchesTab = ({
     setIsEditMode(false);
     setEditingBatch(null);
   };
-
->>>>>>> Stashed changes
   const columns = useMemo(
     () => [
       {
@@ -296,9 +288,6 @@ export const BatchesTab = ({
         header: "Actions",
         cell: ({ row }) => (
           <div className="flex justify-end space-x-2">
-<<<<<<< Updated upstream
-            {canAccess(user?.permissions, "delete", "cells") && (
-=======
             {canAccess(user?.permissions, "update", "batch") && (
               <Button
                 size="sm"
@@ -309,7 +298,6 @@ export const BatchesTab = ({
               </Button>
             )}
             {canAccess(user?.permissions, "delete", "batch") && (
->>>>>>> Stashed changes
               <Button
                 size="sm"
                 variant="ghost"
@@ -358,17 +346,14 @@ export const BatchesTab = ({
 
       <BatchModal
         isOpen={showBatchModal}
-        onClose={() => setShowBatchModal(false)}
+        onClose={handleCloseModal}
         onSubmit={handleBatchSubmit}
         products={products}
         batches={batches}
-<<<<<<< Updated upstream
-=======
         isEditMode={isEditMode}
         initialBatch={editingBatch}
         productionPlans={canViewPlanningTargets ? productionPlans : []}
         planDate={todayDate}
->>>>>>> Stashed changes
       />
 
       <Dialog open={showPlanningDialog} onOpenChange={setShowPlanningDialog}>
