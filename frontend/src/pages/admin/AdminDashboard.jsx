@@ -1,12 +1,13 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { userAPI, unitAPI } from "../../lib/api";
+import { userAPI, unitAPI, productAPI, productionPlanAPI } from "../../lib/api";
 import ShiftDashboard from "./ShiftDashboard";
 import UnitsManagement from "./UnitsManagement";
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Select } from "../../components/ui/select";
+import { Textarea } from "../../components/ui/textarea";
 import {
   Card,
   CardContent,
@@ -70,6 +71,11 @@ const RESOURCE_ROWS = [
     label: "Batch",
     badgeClass: "bg-rose-100 text-rose-700 border-rose-200",
   },
+  {
+    key: "planning",
+    label: "Production Planning",
+    badgeClass: "bg-violet-100 text-violet-700 border-violet-200",
+  },
 ];
 
 const getDefaultPermissionsMatrix = () => ({
@@ -78,17 +84,32 @@ const getDefaultPermissionsMatrix = () => ({
   tier: { create: false, read: false, update: false, delete: false },
   cells: { create: false, read: false, update: false, delete: false },
   batch: { create: false, read: false, update: false, delete: false },
+  planning: { create: false, read: false, update: false, delete: false },
 });
 
 const AdminDashboard = () => {
   const { user, logout } = useAuth();
   const [users, setUsers] = useState([]);
   const [units, setUnits] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [productionPlans, setProductionPlans] = useState([]);
+  const [plansLoading, setPlansLoading] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showCreateModal, setShowCreateModal] = useState(false);
+  const [showPlanModal, setShowPlanModal] = useState(false);
   const [selectedUser, setSelectedUser] = useState(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentView, setCurrentView] = useState("admin");
+  const [editingPlan, setEditingPlan] = useState(null);
+
+  const [planForm, setPlanForm] = useState({
+    unit_id: "",
+    product_id: "",
+    shift: "morning",
+    plan_date: new Date().toISOString().split("T")[0],
+    target_quantity: "",
+    notes: "",
+  });
 
   const [formData, setFormData] = useState({
     name: "",
@@ -101,6 +122,8 @@ const AdminDashboard = () => {
   useEffect(() => {
     fetchUsers();
     fetchUnits();
+    fetchProducts();
+    fetchProductionPlans();
   }, []);
 
   const fetchUsers = async () => {
@@ -120,6 +143,27 @@ const AdminDashboard = () => {
       setUnits(response.data.data);
     } catch (error) {
       toast.error("Failed to fetch units");
+    }
+  };
+
+  const fetchProducts = async () => {
+    try {
+      const response = await productAPI.getAll();
+      setProducts(response.data?.data || []);
+    } catch (error) {
+      toast.error("Failed to fetch products");
+    }
+  };
+
+  const fetchProductionPlans = async () => {
+    try {
+      setPlansLoading(true);
+      const response = await productionPlanAPI.getAll();
+      setProductionPlans(response.data?.data || []);
+    } catch (error) {
+      toast.error("Failed to fetch production plans");
+    } finally {
+      setPlansLoading(false);
     }
   };
 
@@ -215,6 +259,94 @@ const AdminDashboard = () => {
     }
   };
 
+  const resetPlanForm = () => {
+    setPlanForm({
+      unit_id: "",
+      product_id: "",
+      shift: "morning",
+      plan_date: new Date().toISOString().split("T")[0],
+      target_quantity: "",
+      notes: "",
+    });
+    setEditingPlan(null);
+  };
+
+  const handleOpenCreatePlan = () => {
+    resetPlanForm();
+    setShowPlanModal(true);
+  };
+
+  const handleOpenEditPlan = (plan) => {
+    setEditingPlan(plan);
+    setPlanForm({
+      unit_id: String(plan.unit_id || ""),
+      product_id: String(plan.product_id || ""),
+      shift: plan.shift || "morning",
+      plan_date: String(plan.plan_date || "").substring(0, 10),
+      target_quantity: String(plan.target_quantity || ""),
+      notes: plan.notes || "",
+    });
+    setShowPlanModal(true);
+  };
+
+  const handleSavePlan = async (e) => {
+    e.preventDefault();
+
+    if (!planForm.product_id || !planForm.shift || !planForm.plan_date) {
+      toast.error("Please select product, shift and plan date");
+      return;
+    }
+
+    const targetQty = Number(planForm.target_quantity);
+    if (!Number.isFinite(targetQty) || targetQty <= 0) {
+      toast.error("Target quantity must be greater than 0");
+      return;
+    }
+
+    try {
+      if (editingPlan?.id) {
+        await productionPlanAPI.update(editingPlan.id, {
+          target_quantity: targetQty,
+          notes: planForm.notes,
+        });
+      } else {
+        await productionPlanAPI.createOrUpdate({
+          unit_id: Number(planForm.unit_id),
+          product_id: Number(planForm.product_id),
+          shift: planForm.shift,
+          plan_date: planForm.plan_date,
+          target_quantity: targetQty,
+          notes: planForm.notes,
+        });
+      }
+
+      toast.success(
+        editingPlan?.id
+          ? "Production target updated successfully"
+          : "Production target saved successfully",
+      );
+      setShowPlanModal(false);
+      resetPlanForm();
+      fetchProductionPlans();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to save production target");
+    }
+  };
+
+  const handleDeletePlan = async (planId) => {
+    if (!window.confirm("Are you sure you want to delete this production target?")) {
+      return;
+    }
+
+    try {
+      await productionPlanAPI.delete(planId);
+      toast.success("Production target deleted successfully");
+      fetchProductionPlans();
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to delete production target");
+    }
+  };
+
   const handleLogout = () => {
     logout();
     toast.info("Logged out successfully");
@@ -291,6 +423,75 @@ const AdminDashboard = () => {
             </div>
           );
         },
+      },
+    ],
+    [],
+  );
+
+  const planColumns = useMemo(
+    () => [
+      {
+        accessorKey: "plan_date",
+        header: "Plan Date",
+        cell: ({ getValue }) => formatDateOnly(getValue()),
+      },
+      {
+        accessorKey: "unit_code",
+        header: "Unit",
+        cell: ({ row }) => (
+          <Badge variant="outline">
+            {row.original.unit_code || "N/A"}
+          </Badge>
+        ),
+      },
+      {
+        accessorKey: "product_name",
+        header: "Product",
+      },
+      {
+        accessorKey: "shift",
+        header: "Shift",
+        cell: ({ getValue }) => <span className="capitalize">{getValue()}</span>,
+      },
+      {
+        accessorKey: "target_quantity",
+        header: "Target",
+      },
+      {
+        accessorKey: "produced_quantity",
+        header: "Produced",
+      },
+      {
+        id: "remaining_quantity",
+        header: "Remaining",
+        cell: ({ row }) => {
+          const target = Number(row.original.target_quantity || 0);
+          const produced = Number(row.original.produced_quantity || 0);
+          const remaining = target - produced;
+          return <span className={remaining < 0 ? "text-red-600" : ""}>{remaining}</span>;
+        },
+      },
+      {
+        id: "actions",
+        header: "Actions",
+        cell: ({ row }) => (
+          <div className="flex justify-end gap-2">
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleOpenEditPlan(row.original)}
+            >
+              <Edit className="w-4 h-4 text-blue-600" />
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => handleDeletePlan(row.original.id)}
+            >
+              <Trash2 className="w-4 h-4 text-red-600" />
+            </Button>
+          </div>
+        ),
       },
     ],
     [],
@@ -419,6 +620,29 @@ const AdminDashboard = () => {
                 columns={userColumns}
                 data={users.filter((u) => u.role === "user")}
               />
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="mt-8">
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Production Planning</CardTitle>
+                <CardDescription>
+                  Set and manage target quantity by product, shift, and date.
+                </CardDescription>
+              </div>
+              <Button onClick={handleOpenCreatePlan}>Add Target</Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {plansLoading ? (
+              <div className="text-center py-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto"></div>
+              </div>
+            ) : (
+              <DataTable columns={planColumns} data={productionPlans} />
             )}
           </CardContent>
         </Card>
@@ -663,6 +887,146 @@ const AdminDashboard = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={showPlanModal}
+        onOpenChange={(open) => {
+          setShowPlanModal(open);
+          if (!open) {
+            resetPlanForm();
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {editingPlan?.id ? "Edit Production Target" : "Add Production Target"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleSavePlan} className="space-y-4 mt-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="planUnit">Manufacturing Unit *</Label>
+                <Select
+                  id="planUnit"
+                  value={planForm.unit_id}
+                  onChange={(e) =>
+                    setPlanForm((prev) => ({ ...prev, unit_id: e.target.value }))
+                  }
+                  required
+                  disabled={Boolean(editingPlan?.id)}
+                >
+                  <option value="">Select Unit</option>
+                  {units.map((unit) => (
+                    <option key={unit.id} value={String(unit.id)}>
+                      {unit.name} ({unit.code})
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="planProduct">Product *</Label>
+                <Select
+                  id="planProduct"
+                  value={planForm.product_id}
+                  onChange={(e) =>
+                    setPlanForm((prev) => ({ ...prev, product_id: e.target.value }))
+                  }
+                  required
+                  disabled={Boolean(editingPlan?.id)}
+                >
+                  <option value="">Select Product</option>
+                  {products
+                    .filter((product) =>
+                      !planForm.unit_id || String(product.unit_id) === String(planForm.unit_id),
+                    )
+                    .map((product) => (
+                      <option key={product.id} value={String(product.id)}>
+                        {product.name}
+                      </option>
+                    ))}
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="planShift">Shift *</Label>
+                <Select
+                  id="planShift"
+                  value={planForm.shift}
+                  onChange={(e) =>
+                    setPlanForm((prev) => ({ ...prev, shift: e.target.value }))
+                  }
+                  required
+                  disabled={Boolean(editingPlan?.id)}
+                >
+                  <option value="morning">Morning</option>
+                  <option value="afternoon">Afternoon</option>
+                  <option value="night">Night</option>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="planDate">Plan Date *</Label>
+                <Input
+                  id="planDate"
+                  type="date"
+                  value={planForm.plan_date}
+                  onChange={(e) =>
+                    setPlanForm((prev) => ({ ...prev, plan_date: e.target.value }))
+                  }
+                  required
+                  disabled={Boolean(editingPlan?.id)}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="planTargetQty">Target Quantity *</Label>
+              <Input
+                id="planTargetQty"
+                type="number"
+                min="1"
+                value={planForm.target_quantity}
+                onChange={(e) =>
+                  setPlanForm((prev) => ({ ...prev, target_quantity: e.target.value }))
+                }
+                required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="planNotes">Notes</Label>
+              <Textarea
+                id="planNotes"
+                rows={3}
+                value={planForm.notes}
+                onChange={(e) =>
+                  setPlanForm((prev) => ({ ...prev, notes: e.target.value }))
+                }
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setShowPlanModal(false);
+                  resetPlanForm();
+                }}
+              >
+                Cancel
+              </Button>
+              <Button type="submit">
+                {editingPlan?.id ? "Update Target" : "Save Target"}
+              </Button>
+            </div>
+          </form>
         </DialogContent>
       </Dialog>
     </div>

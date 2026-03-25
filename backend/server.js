@@ -10,6 +10,7 @@ import userRoutes from "./routes/userRoutes.js";
 import unitRoutes from "./routes/unitRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import batchRoutes from "./routes/batchRoutes.js";
+import productionPlanRoutes from "./routes/productionPlanRoutes.js";
 import templateRoutes from "./routes/templateRoutes.js";
 import tierRoutes from "./routes/tierRoutes.js";
 
@@ -33,6 +34,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/units", unitRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/batches", batchRoutes);
+app.use("/api/production-plans", productionPlanRoutes);
 app.use("/api/templates", templateRoutes);
 app.use("/api/tiers", tierRoutes);
 

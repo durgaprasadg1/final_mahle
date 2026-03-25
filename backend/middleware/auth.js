@@ -4,6 +4,7 @@ import User from "../models/User.js";
 const RESOURCE_ALIASES = {
   product: "product",
   products: "product",
+  fracticl: "fracticle",
   fracticle: "fracticle",
   fractile: "fracticle",
   fractiles: "fracticle",
@@ -13,6 +14,11 @@ const RESOURCE_ALIASES = {
   cells: "cells",
   batch: "batch",
   batches: "batch",
+  planning: "planning",
+  productionplanning: "planning",
+  production_planning: "planning",
+  production_plan: "planning",
+  production_plans: "planning",
 };
 
 const normalizeResource = (resource) => {
@@ -95,9 +101,21 @@ export const checkPermission = (permission, resourceResolver = null) => {
 
     if (resolvedResource) {
       const resourcePermissions = userPermissions.resources?.[resolvedResource];
+      const legacyBatchPermissions =
+        resolvedResource === "batch"
+          ? userPermissions.resources?.cells
+          : undefined;
+      const batchFallbackPermissions =
+        resolvedResource === "planning"
+          ? userPermissions.resources?.batch ?? userPermissions.resources?.cells
+          : undefined;
       const isAllowed =
         typeof resourcePermissions?.[permission] === "boolean"
           ? resourcePermissions[permission]
+          : typeof legacyBatchPermissions?.[permission] === "boolean"
+            ? legacyBatchPermissions[permission]
+            : typeof batchFallbackPermissions?.[permission] === "boolean"
+              ? batchFallbackPermissions[permission]
           : userPermissions[permission];
 
       if (!isAllowed) {

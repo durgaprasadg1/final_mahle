@@ -128,4 +128,12 @@ export const batchAPI = {
     }),
 };
 
+export const productionPlanAPI = {
+  createOrUpdate: (data) => api.post("/production-plans", data),
+  getAll: (params) => api.get("/production-plans", { params }),
+  getProgress: (params) => api.get("/production-plans/progress", { params }),
+  update: (id, data) => api.put(`/production-plans/${id}`, data),
+  delete: (id) => api.delete(`/production-plans/${id}`),
+};
+
 export default api;

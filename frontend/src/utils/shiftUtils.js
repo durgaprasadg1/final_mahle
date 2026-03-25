@@ -49,6 +49,8 @@ export const resolveShiftType = (shiftConfig = {}) => {
   }
 
   if (shiftLabel.includes("morn")) return "morning";
+  if (shiftLabel.includes("even")) return "afternoon";
+  if (shiftLabel.includes("eve")) return "afternoon";
   if (shiftLabel.includes("after")) return "afternoon";
   if (shiftLabel.includes("night")) return "night";
 
