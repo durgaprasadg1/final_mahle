@@ -72,5 +72,5 @@ export function calculateDuration(startTime, endTime) {
   const start = new Date(startTime);
   const end = new Date(endTime);
   const diff = end - start;
-  return Math.round(diff / 60000); // Convert to minutes
+  return Math.round(diff / 60000); 
 }

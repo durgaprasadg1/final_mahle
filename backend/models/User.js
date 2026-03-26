@@ -1,13 +1,14 @@
-import bcrypt from "bcryptjs";
 import pool from "../config/database.js";
+import bcrypt from "bcryptjs";
 class User {
   static CRUD_OPERATIONS = ["create", "read", "update", "delete"];
 
-  static RESOURCE_KEYS = ["product", "fracticl", "tier", "cells", "batch"];
+  static RESOURCE_KEYS = ["product", "fracticle", "tier", "cells", "batch", "planning"];
 
   static RESOURCE_ALIASES = {
     product: "product",
     products: "product",
+    fracticl: "fracticle",
     fracticle: "fracticle",
     fractile: "fracticle",
     fractiles: "fracticle",
@@ -17,6 +18,11 @@ class User {
     cells: "cells",
     batch: "batch",
     batches: "batch",
+    planning: "planning",
+    productionplanning: "planning",
+    production_planning: "planning",
+    productionplan: "planning",
+    productionplans: "planning",
   };
 
   static normalizeResourceKey(resource) {
@@ -223,7 +229,7 @@ class User {
   }
 
   // Find user by email for authentication
-  static async findByEmail(email, password) {
+  static async findByEmail(email,password = null) {
     const query = `
       SELECT u.*, units.name as unit_name, units.code as unit_code
       FROM users u
@@ -239,6 +245,7 @@ class User {
 
     const user = result.rows[0];
     
+    // Only verify password if provided
     if (password) {
       const isPasswordValid = await bcrypt.compare(password, user.password);
       if (!isPasswordValid) {
@@ -246,6 +253,7 @@ class User {
       }
     }
 
+    // Convert permissions to object for API response
     user.permissions = this.permissionsToObject(user.permissions);
 
     return user;

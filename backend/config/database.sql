@@ -9,6 +9,7 @@ DROP FUNCTION IF EXISTS update_updated_at_column() CASCADE;
 DROP TABLE IF EXISTS tier_templates CASCADE;
 DROP TABLE IF EXISTS cell_templates CASCADE;
 DROP TABLE IF EXISTS fractile_templates CASCADE;
+DROP TABLE IF EXISTS production_plans CASCADE;
 DROP TABLE IF EXISTS batches CASCADE;
 DROP TABLE IF EXISTS products CASCADE;
 DROP TABLE IF EXISTS product_fractiles CASCADE;
@@ -48,7 +49,7 @@ CREATE TABLE users (
     role user_role NOT NULL DEFAULT 'user',
     status user_status NOT NULL DEFAULT 'active',
     unit_id INTEGER REFERENCES units(id) ON DELETE SET NULL,
-    permissions TEXT DEFAULT '{"c":1,"r":1,"u":1,"d":1,"m":{"product":{"c":1,"r":1,"u":1,"d":1},"fracticl":{"c":1,"r":1,"u":1,"d":1},"tier":{"c":1,"r":1,"u":1,"d":1},"cells":{"c":1,"r":1,"u":1,"d":1},"batch":{"c":1,"r":1,"u":1,"d":1}}}',
+    permissions TEXT DEFAULT '{"c":1,"r":1,"u":1,"d":1,"m":{"product":{"c":1,"r":1,"u":1,"d":1},"fracticl":{"c":1,"r":1,"u":1,"d":1},"tier":{"c":1,"r":1,"u":1,"d":1},"cells":{"c":1,"r":1,"u":1,"d":1},"batch":{"c":1,"r":1,"u":1,"d":1},"planning":{"c":1,"r":1,"u":1,"d":1}}}',
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -169,6 +170,21 @@ CREATE TABLE batches (
     CONSTRAINT unique_product_shift_time UNIQUE(product_id, shift, batch_date, start_time)
 );
 
+CREATE TABLE production_plans (
+    id SERIAL PRIMARY KEY,
+    unit_id INTEGER NOT NULL REFERENCES units(id) ON DELETE CASCADE,
+    product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+    shift shift_type NOT NULL,
+    plan_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    target_quantity INTEGER NOT NULL CHECK (target_quantity > 0),
+    notes TEXT,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT unique_production_plan UNIQUE(unit_id, product_id, shift, plan_date)
+);
+
 
 CREATE INDEX idx_users_email ON users(email);
 CREATE INDEX idx_users_unit ON users(unit_id);
@@ -187,6 +203,9 @@ CREATE INDEX idx_batches_unit ON batches(unit_id);
 CREATE INDEX idx_batches_shift ON batches(shift);
 CREATE INDEX idx_batches_date_shift ON batches(batch_date, shift);
 CREATE INDEX idx_batches_product_date ON batches(product_id, batch_date);
+CREATE INDEX idx_production_plans_unit ON production_plans(unit_id);
+CREATE INDEX idx_production_plans_product_date ON production_plans(product_id, plan_date);
+CREATE INDEX idx_production_plans_shift_date ON production_plans(shift, plan_date);
 
 
 INSERT INTO units (name, code, description, location) VALUES 
@@ -220,6 +239,9 @@ CREATE TRIGGER update_products_updated_at BEFORE UPDATE ON products
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_batches_updated_at BEFORE UPDATE ON batches 
+FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TRIGGER update_production_plans_updated_at BEFORE UPDATE ON production_plans
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_fractile_templates_updated_at BEFORE UPDATE ON fractile_templates

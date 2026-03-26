@@ -4,7 +4,7 @@ import { toast } from "react-toastify";
 
 const AuthContext = createContext(null);
 
-const RESOURCE_KEYS = ["product", "fracticl", "tier", "cells"];
+const RESOURCE_KEYS = ["product", "fracticl", "tier", "cells", "batch", "planning"];
 
 const normalizeCrud = (input = {}) => ({
   create: Boolean(input.create ?? input.c),
