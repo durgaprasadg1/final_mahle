@@ -22,24 +22,24 @@ import { Select } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { toast } from "react-toastify";
 
+// User ke permissions check karne ka helper function
 const canAccess = (permissions, operation, resource = "batch") => {
   const scoped = permissions?.resources?.[resource]?.[operation];
   if (typeof scoped === "boolean") {
     return scoped;
   }
-  // Backward compatibility for older users where batch rights were stored under cells.
+  // Purane users ke liye: agar batch rights 'cells' ke andar mile toh bhi allow karo
   if (resource === "batch") {
     const legacyScoped = permissions?.resources?.cells?.[operation];
     if (typeof legacyScoped === "boolean") {
       return legacyScoped;
     }
   }
+  // Fallback: direct permission property check
   return Boolean(permissions?.[operation]);
 };
 
-/**
- * Batches Tab Component
- */
+// BatchesTab: Production batches ka main tab component
 export const BatchesTab = ({
   batches,
   products,
@@ -48,6 +48,7 @@ export const BatchesTab = ({
   onUpdateBatch,
   onDeleteBatch,
 }) => {
+  // Modal open/close, edit mode, kis batch ko edit kar rahe hain, delay dialog ke liye state
   const [showBatchModal, setShowBatchModal] = useState(false);
   const [isEditMode, setIsEditMode] = useState(false);
   const [editingBatch, setEditingBatch] = useState(null);
@@ -110,9 +111,10 @@ export const BatchesTab = ({
     fetchProductionPlans(todayDate);
   }, [todayDate, canViewPlanningTargets]);
 
+  // Batch create/update form submit handle karta hai
   const handleBatchSubmit = async (batchFormData, selectedSlots) => {
     if (isEditMode && editingBatch) {
-      // Edit mode - update single batch
+      // Edit mode: ek batch update karo
       const success = await onUpdateBatch(editingBatch.id, {
         quantity_produced: parseInt(batchFormData.quantity_produced, 10),
         shift: batchFormData.shift,
@@ -137,7 +139,7 @@ export const BatchesTab = ({
         setEditingBatch(null);
       }
     } else {
-      // Create mode - create multiple batches
+      // Create mode: ek saath multiple batches bana sakte hain (slots ke hisaab se)
       const result = await onCreateBatches(batchFormData, selectedSlots);
       if (result.createdCount > 0) {
         fetchProductionPlans(todayDate);
@@ -197,6 +199,7 @@ export const BatchesTab = ({
     setShowBatchModal(true);
   };
 
+  // Modal band karne par sab state reset ho jati hai
   const handleCloseModal = () => {
     setShowBatchModal(false);
     setIsEditMode(false);
@@ -207,7 +210,7 @@ export const BatchesTab = ({
       {
         accessorKey: "product_name",
         header: "Product",
-        cell: ({ getValue }) => <div>{getValue()}</div>,
+        cell: ({ getValue }) => <div>{getValue()}</div>, // Product ka naam
       },
       {
         accessorKey: "product_type",
@@ -216,14 +219,14 @@ export const BatchesTab = ({
           <div className="capitalize">
             {getValue()?.replace(/_/g, " ") || "-"}
           </div>
-        ),
+        ), // Product ka type (underscore ko space se replace kiya)
       },
       {
         accessorKey: "quantity_produced",
         header: "Quantity",
         cell: ({ getValue }) => (
           <div className="font-semibold">{getValue()}</div>
-        ),
+        ), // Kitna produce hua
       },
       {
         id: "slot",
@@ -232,7 +235,7 @@ export const BatchesTab = ({
           <div className="text-sm">
             {row.original.start_time} - {row.original.end_time}
           </div>
-        ),
+        ), // Kis time slot mein batch bana
       },
       {
         accessorKey: "shift",
@@ -245,6 +248,7 @@ export const BatchesTab = ({
         id: "delay",
         header: "Delay",
         cell: ({ row }) => {
+          // Agar delay hua toh reason dekh sakte hain
           const batch = row.original;
           return batch.had_delay === "yes" ? (
             <div className="flex items-center gap-2">
@@ -266,12 +270,13 @@ export const BatchesTab = ({
       {
         accessorKey: "status",
         header: "Status",
-        cell: ({ getValue }) => <Badge variant="success">{getValue()}</Badge>,
+        cell: ({ getValue }) => <Badge variant="success">{getValue()}</Badge>, // Batch ka status
       },
       {
         id: "filled_by",
         header: "Filled By",
         cell: ({ row }) => {
+          // Kis user ne batch fill kiya aur kab
           const batch = row.original;
           return (
             <div>
@@ -287,6 +292,7 @@ export const BatchesTab = ({
         id: "actions",
         header: "Actions",
         cell: ({ row }) => (
+          // Edit aur delete buttons, permission ke hisaab se
           <div className="flex justify-end space-x-2">
             {canAccess(user?.permissions, "update", "batch") && (
               <Button
@@ -313,6 +319,7 @@ export const BatchesTab = ({
     [user, onDeleteBatch, shiftNameByType],
   );
 
+  // Main render: Card, DataTable, BatchModal, Delay Reason Dialog
   return (
     <>
       <Card>

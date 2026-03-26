@@ -1,5 +1,7 @@
 import { clsx } from "clsx";
 import { twMerge } from "tailwind-merge";
+//formate change karne ke function likha hai
+
 
 export function cn(...inputs) {
   return twMerge(clsx(inputs));
