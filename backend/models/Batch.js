@@ -8,8 +8,21 @@ class Batch {
     const placeholders = [];
     const values = [];
     let paramCount = 1;
-  
-    batchesData.forEach((batch, index) => {
+
+    // Filter out duplicate entries from the input (same product_id, shift, batch_date, start_time)
+    const seen = new Set();
+    const filtered = [];
+    for (const batch of batchesData) {
+      const bdate = batch.batch_date || new Date().toISOString().split("T")[0];
+      const key = `${batch.product_id}|${batch.shift}|${bdate}|${batch.start_time}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      filtered.push({ ...batch, batch_date: bdate });
+    }
+
+    if (filtered.length === 0) return [];
+
+    filtered.forEach((batch) => {
       const {
         product_id,
         unit_id,
@@ -25,32 +38,30 @@ class Batch {
         delay_reason,
         created_by,
       } = batch;
-  
-      //($1, $2, $3, ..., $13) ye placeholder rhte
+
       const rowPlaceholders = [];
       for (let i = 0; i < 13; i++) {
         rowPlaceholders.push(`$${paramCount++}`);
       }
       placeholders.push(`(${rowPlaceholders.join(", ")})`);
-  
-      // Add values in same order
+
       values.push(
         product_id,
         unit_id,
         quantity_produced,
         shift,
         batch_in_shift,
-        batch_date || new Date().toISOString().split("T")[0],
+        batch_date,
         start_time,
         end_time,
         status || "completed",
         notes || null,
         had_delay || "no",
         delay_reason || null,
-        created_by
+        created_by,
       );
     });
-  
+
     const query = `
       INSERT INTO batches (
         product_id, unit_id, quantity_produced, shift, batch_in_shift,
@@ -58,9 +69,10 @@ class Batch {
         had_delay, delay_reason, created_by
       )
       VALUES ${placeholders.join(", ")}
+      ON CONFLICT ON CONSTRAINT unique_product_shift_time DO NOTHING
       RETURNING *
     `;
-  
+
     const result = await pool.query(query, values);
     return result.rows;
   }
@@ -155,7 +167,7 @@ class Batch {
       LEFT JOIN users ON b.created_by = users.id
       WHERE 1=1  
     `;
- // need to dynamically add filters to the query kyuki hmne wha 1=1 which is always true, to make it easier to append AND conditions without worrying about whether it's the first condition or not. Then we check for each possible filter and if it's present, we append the appropriate condition to the query and add the value to the values array. Finally, we execute the query with the accumulated values.
+    // need to dynamically add filters to the query kyuki hmne wha 1=1 which is always true, to make it easier to append AND conditions without worrying about whether it's the first condition or not. Then we check for each possible filter and if it's present, we append the appropriate condition to the query and add the value to the values array. Finally, we execute the query with the accumulated values.
     const values = [];
     let paramCount = 1;
 
@@ -329,7 +341,7 @@ class Batch {
     return result.rows;
   }
 
-//  shift me next batch number dene ke liye kaam
+  //  shift me next batch number dene ke liye kaam
   static async getNextBatchInShift(productId, shift, date = null) {
     const queryDate = date || new Date().toISOString().split("T")[0];
 
