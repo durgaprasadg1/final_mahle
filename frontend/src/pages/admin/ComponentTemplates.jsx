@@ -1202,29 +1202,29 @@ const ComponentTemplates = () => {
                         ))}
                       </select>
                     </div>
-                    <div>
-                      <Label>Parent Cell *</Label>
-                      <select
-                        className="w-full px-3 py-2 border rounded-md text-sm bg-white"
-                        value={form.cell_id}
-                        onChange={(e) => setForm({ ...form, cell_id: e.target.value })}
-                        disabled={!form.fractile_id || loadingCellsForDropdown}
-                        required
-                      >
-                        <option value="">
-                          {loadingCellsForDropdown 
-                            ? "Loading cells..." 
-                            : !form.fractile_id 
-                            ? "Select a Fractile first" 
-                            : allCellsForFractile.length === 0 
-                            ? "No cells in this Fractile" 
-                            : "Select a Cell..."}
-                        </option>
-                        {allCellsForFractile.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
-                      </select>
-                    </div>
+                    {form.fractile_id && (
+                      <div>
+                        <Label>Parent Cell *</Label>
+                        <select
+                          className="w-full px-3 py-2 border rounded-md text-sm bg-white"
+                          value={form.cell_id}
+                          onChange={(e) => setForm({ ...form, cell_id: e.target.value })}
+                          disabled={loadingCellsForDropdown}
+                          required
+                        >
+                          <option value="">
+                            {loadingCellsForDropdown 
+                              ? "Loading cells..." 
+                              : allCellsForFractile.length === 0 
+                              ? "No cells in this Fractile" 
+                              : "Select a Cell..."}
+                          </option>
+                          {allCellsForFractile.map((c) => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
