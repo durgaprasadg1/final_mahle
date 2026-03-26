@@ -12,9 +12,12 @@ import { userAPI, unitAPI } from "../../lib/api";
  * Configure identity details and resource-level CRUD permissions
  */
 export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
+  // Available manufacturing units dropdown ke liye store hoti hain
   const [units, setUnits] = useState([]);
+  // Submit ke time button/loading state control karne ke liye
   const [loading, setLoading] = useState(false);
 
+  // Basic user details form state
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -22,6 +25,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
     unit_id: "",
   });
 
+  // Resource-wise CRUD permissions matrix
   const [permissions, setPermissions] = useState({
     product: { create: false, read: false, update: false, delete: false },
     fracticle: { create: false, read: false, update: false, delete: false },
@@ -33,6 +37,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   // Fetch units when modal opens
   useEffect(() => {
     if (isOpen) {
+      // Modal open hote hi latest units fetch karte hain
       fetchUnits();
     }
   }, [isOpen]);
@@ -40,6 +45,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   const fetchUnits = async () => {
     try {
       const response = await unitAPI.getAll();
+      // API response se units list set kar do
       setUnits(response.data || []);
     } catch (error) {
       console.error("Failed to fetch units:", error);
@@ -49,6 +55,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    //  jis field me change ho, wahi update karo
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -56,6 +63,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   };
 
   const handlePermissionChange = (resource, operation) => {
+    // Specific resource-operation checkbox ko toggle karo
     setPermissions((prev) => ({
       ...prev,
       [resource]: {
@@ -67,6 +75,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleSelectAll = () => {
     const allSelected = {};
+    // Sare resources ke sare CRUD permissions true kar do
     Object.keys(permissions).forEach((resource) => {
       allSelected[resource] = {
         create: true,
@@ -80,6 +89,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
   const handleClearAll = () => {
     const allCleared = {};
+    // Sare resources ke sare CRUD permissions false kar do
     Object.keys(permissions).forEach((resource) => {
       allCleared[resource] = {
         create: false,
@@ -94,7 +104,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    // Validation
+    // Client-side validation taaki incomplete form submit na ho
     if (!formData.name.trim()) {
       toast.error("Full name is required");
       return;
@@ -114,6 +124,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
     setLoading(true);
     try {
+      // Backend payload me form details + permissions matrix bhejte hain
       const payload = {
         ...formData,
         permissions,
@@ -121,8 +132,10 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
 
       await userAPI.create(payload);
       toast.success("User created successfully!");
+      // Success ke baad form reset + modal close
       handleClose();
       if (onSuccess) {
+        // Parent component ko notify karo taaki list refresh ho sake
         onSuccess();
       }
     } catch (error) {
@@ -136,7 +149,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   };
 
   const handleClose = () => {
-    // Reset form
+    // Modal close par pura form aur permissions default state me reset
     setFormData({
       name: "",
       email: "",
@@ -154,6 +167,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
   };
 
   return (
+    // onOpenChange me handleClose use karke dialog close/reset centralized rakha hai
     <Dialog open={isOpen} onOpenChange={handleClose} className="w-full">
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -164,7 +178,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* User Details Grid */}
+          {/* User basic details inputs */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="name">Full Name *</Label>
@@ -225,7 +239,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
           </div>
 
-          {/* Permissions Matrix */}
+          {/* Resource-wise permissions matrix (CRUD) */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold">Permissions Matrix</h3>
@@ -302,7 +316,7 @@ export const CreateUserModal = ({ isOpen, onClose, onSuccess }) => {
             </div>
           </div>
 
-          {/* Form Actions */}
+          {/* Form action buttons */}
           <div className="flex justify-end gap-3 pt-4">
             <Button
               type="button"

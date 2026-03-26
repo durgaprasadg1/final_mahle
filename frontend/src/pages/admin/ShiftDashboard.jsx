@@ -34,11 +34,12 @@ const ShiftDashboard = ({ onBack }) => {
     startTime: "",
     endTime: "",
     timeInterval: "hourwise",
-    color: "#3b82f6",
+    color: "#3b82f6",//yeh kuch kaam ka nhi hai
     isActive: true,
   });
 
   useEffect(() => {
+    // Component load hote hi pehle se saved shifts utha lo
     fetchShifts();
   }, []);
 
@@ -46,6 +47,7 @@ const ShiftDashboard = ({ onBack }) => {
     try {
       setLoading(true);
 
+      // Local storage se shifts read karke state sync kar rahe hain
       const savedShifts = localStorage.getItem("shifts");
       if (savedShifts) {
         setShifts(JSON.parse(savedShifts));
@@ -61,6 +63,7 @@ const ShiftDashboard = ({ onBack }) => {
     const { name, value, type, checked } = e.target;
     setFormData((prev) => ({
       ...prev,
+      // Checkbox ke liye boolean, baaki fields ke liye normal value
       [name]: type === "checkbox" ? checked : value,
     }));
   };
@@ -68,7 +71,7 @@ const ShiftDashboard = ({ onBack }) => {
   const handleCreateShift = async (e) => {
     e.preventDefault();
 
-    // Validate
+    // Basic form validation yahin pe handle kar rahe hain
     if (!formData.name.trim()) {
       toast.error("Shift name is required");
       return;
@@ -79,12 +82,13 @@ const ShiftDashboard = ({ onBack }) => {
     }
 
     try {
+      // Edit mode ho to existing id rakho, create mode ho to nayi id do
       const newShift = {
         id: editingShift?.id || Date.now(),
         ...formData,
         createdAt: editingShift?.createdAt || new Date().toISOString(),
       };
-
+          //Yeh block decide karta hai ki naya shift create karna hai ya existing shift update karna hai.
       let updatedShifts;
       if (editingShift) {
         updatedShifts = shifts.map((s) =>
@@ -97,6 +101,7 @@ const ShiftDashboard = ({ onBack }) => {
       }
 
       setShifts(updatedShifts);
+      // UI aur local storage dono jagah same data maintain rakhna hai
       localStorage.setItem("shifts", JSON.stringify(updatedShifts));
 
       setShowCreateModal(false);
@@ -114,6 +119,7 @@ const ShiftDashboard = ({ onBack }) => {
   };
 
   const handleDeleteShift = async (shiftId) => {
+    // Delete se pehle confirmation lena mandatory hai
     if (!window.confirm("Are you sure you want to delete this shift?")) return;
 
     try {
@@ -127,6 +133,7 @@ const ShiftDashboard = ({ onBack }) => {
   };
 
   const handleToggleStatus = (shiftId) => {
+    // Active/Inactive toggle karke turant persist kar dete hain
     const updatedShifts = shifts.map((shift) => {
       if (shift.id === shiftId) {
         const newStatus = !shift.isActive;
@@ -141,13 +148,14 @@ const ShiftDashboard = ({ onBack }) => {
   };
 
   const resetForm = () => {
+    // Modal close ya save ke baad form ko clean state mein laana
     setFormData({
       name: "",
       description: "",
       startTime: "",
       endTime: "",
       timeInterval: "hourwise",
-      color: "#3b82f6",
+      color: "#3b82f6", //kuch kaam ka nhi hai
       isActive: true,
     });
   };
@@ -159,6 +167,7 @@ const ShiftDashboard = ({ onBack }) => {
   };
 
   const calculateDuration = (startTime, endTime) => {
+    // Start/end ko total minutes mein convert karke duration nikaal rahe hain
     const [startHour, startMin] = startTime.split(":").map(Number);
     const [endHour, endMin] = endTime.split(":").map(Number);
 
@@ -186,7 +195,7 @@ const ShiftDashboard = ({ onBack }) => {
     let startTotal = startH * 60 + startM;
     let endTotal = endH * 60 + endM;
 
-    //overnight shift ko handle karne ke liye
+    // Overnight case: end time next day maana jayega
     if (endTotal <= startTotal) {
       endTotal += 24 * 60;
     }
@@ -202,7 +211,7 @@ const ShiftDashboard = ({ onBack }) => {
 
     while (current < endTotal) {
       let next = current + intervalMin;
-      if (next > endTotal) next = endTotal; // Cap the last slot at the actual end time
+      if (next > endTotal) next = endTotal; // Last slot ko exact end time tak hi rakho
 
       slots.push(`${formatTime(current)} - ${formatTime(next)}`);
       current = next;
@@ -210,9 +219,11 @@ const ShiftDashboard = ({ onBack }) => {
 
     return slots;
   };
-
+  
+    //useMemo React ka ek hook hai jo kisi value ko "memoize" karta hai—matlab, woh value tabhi dobara calculate hoti hai jab uske dependencies change hoti hain. Isse performance improve hoti hai, especially jab calculation heavy ho ya unnecessary re-renders avoid karne ho.
   const shiftColumns = useMemo(
     () => [
+      // Table columns centralised hain taki DataTable clean rahe
       {
         id: "shift_name",
         header: "Shift Name",
@@ -277,6 +288,7 @@ const ShiftDashboard = ({ onBack }) => {
         header: "Actions",
         cell: ({ row }) => {
           const shift = row.original;
+          // Har row ke action buttons: toggle, edit, delete
           return (
             <div className="flex items-center space-x-2">
               <Button
@@ -324,6 +336,7 @@ const ShiftDashboard = ({ onBack }) => {
     formData.endTime,
     formData.timeInterval,
   );
+  // Form values ke basis pe live preview generate ho raha hai
 
   return (
     <div className="min-h-screen bg-gray-50">

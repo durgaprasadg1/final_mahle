@@ -433,7 +433,7 @@ const AdminDashboard = () => {
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateUser} className="space-y-4 mt-4">
-            {/* Row 1: Full Name and Email */}
+            {/*  */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="name">Full Name *</Label>
@@ -462,7 +462,7 @@ const AdminDashboard = () => {
               </div>
             </div>
 
-            {/* Row 2: Password and Manufacturing Unit */}
+            {/*  */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="password">Password *</Label>

@@ -23,7 +23,7 @@ const Button = React.forwardRef(
       lg: "h-11 rounded-md px-8",
       icon: "h-10 w-10",
     };
-
+//se sab classes merge hoti hain, fir button render hota hai with forwarded ref and all extra props.
     return (
       <button
         className={cn(baseStyles, variants[variant], sizes[size], className)}
@@ -33,6 +33,7 @@ const Button = React.forwardRef(
     );
   },
 );
+//DevTools me readable naam dikhane ke liye.
 Button.displayName = "Button";
 
 export { Button };

@@ -153,3 +153,8 @@ export const AuthProvider = ({ children }) => {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
+
+
+
+
+//Yeh file pura app mein authentication ka single source of truth hai, taki har component ko alag se login state na dekhni pade—bas context se le le.
