@@ -119,7 +119,7 @@ export const useBatches = () => {
     try {
       const response = await batchAPI.createBulk(batches);
 
-      toast.success(response.data.message);
+      toast.success("Batches created successfully");
       if (response.data.errors?.length > 0) {
         console.warn("Some batches failed:", response.data.errors);
       }
@@ -158,7 +158,7 @@ export const useBatches = () => {
       await batchAPI.delete(batchId);
       toast.success("Batch deleted successfully");
       await fetchBatches();
-      return true;
+      return true;git 
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to delete batch");
       return false;

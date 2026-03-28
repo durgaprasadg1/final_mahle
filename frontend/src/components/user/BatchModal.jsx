@@ -406,23 +406,21 @@ export const BatchModal = ({
       });
     } else {
       // Create mode - validate slots
-    if (selectedBatchSlots.length === 0) {
-      toast.error("Please select at least one time slot");
-      return;
+        if (selectedBatchSlots.length === 0) {
+          toast.error("Please select at least one time slot");
+          return;
+        }
+        if (batchForm.had_delay === "yes" && !batchForm.delay_reason.trim()) {
+          toast.error("Please provide a reason for the delay");
+          return;
+        }
+
+        await onSubmit(batchForm, selectedBatchSlots);
     }
     if (batchForm.had_delay === "yes" && !batchForm.delay_reason.trim()) {
       toast.error("Please provide a reason for the delay");
       return;
     }
-
-    await onSubmit(batchForm, selectedBatchSlots);
-    }
-    if (batchForm.had_delay === "yes" && !batchForm.delay_reason.trim()) {
-      toast.error("Please provide a reason for the delay");
-      return;
-    }
-
-    await onSubmit(batchForm, selectedBatchSlots);
   };
 
   const handleClose = () => {
