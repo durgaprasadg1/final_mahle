@@ -183,6 +183,66 @@ class Batch {
       paramCount++;
     }
 
+    if (filters.created_by) {
+      query += ` AND b.created_by = $${paramCount}`;
+      values.push(filters.created_by);
+      paramCount++;
+    }
+
+    if (filters.created_by_name) {
+      query += ` AND users.name ILIKE $${paramCount}`;
+      values.push(`%${filters.created_by_name}%`);
+      paramCount++;
+    }
+
+    if (filters.batch_in_shift) {
+      query += ` AND b.batch_in_shift = $${paramCount}`;
+      values.push(filters.batch_in_shift);
+      paramCount++;
+    }
+
+    if (filters.fractile_id) {
+      query += `
+        AND EXISTS (
+          SELECT 1
+          FROM product_fractiles pf
+          JOIN fractile_templates ft ON ft.name = pf.name
+          WHERE pf.product_id = b.product_id
+            AND ft.id = $${paramCount}
+        )
+      `;
+      values.push(filters.fractile_id);
+      paramCount++;
+    }
+
+    if (filters.cell_id) {
+      query += `
+        AND EXISTS (
+          SELECT 1
+          FROM product_cells pc
+          JOIN cell_templates ct ON ct.name = pc.name
+          WHERE pc.product_id = b.product_id
+            AND ct.id = $${paramCount}
+        )
+      `;
+      values.push(filters.cell_id);
+      paramCount++;
+    }
+
+    if (filters.tier_id) {
+      query += `
+        AND EXISTS (
+          SELECT 1
+          FROM product_tiers pt
+          JOIN tier_templates tt ON tt.name = pt.name
+          WHERE pt.product_id = b.product_id
+            AND tt.id = $${paramCount}
+        )
+      `;
+      values.push(filters.tier_id);
+      paramCount++;
+    }
+
     if (filters.date_from) {
       query += ` AND DATE(b.created_at) >= $${paramCount}`;
       values.push(filters.date_from);

@@ -53,6 +53,8 @@ const UserDashboard = () => {
     downloadExcel,
     downloadPDF,
     clearResults,
+    reportFilters,
+    setReportFilters,
   } = useReports();
 
   const handleLogout = () => {
@@ -120,6 +122,11 @@ const UserDashboard = () => {
         setReportDateFrom={setReportDateFrom}
         reportDateTo={reportDateTo}
         setReportDateTo={setReportDateTo}
+        reportFilters={reportFilters}
+        setReportFilters={setReportFilters}
+        allFractiles={allFractiles}
+        allCells={allCells}
+        allTiers={allTiers}
         isGeneratingReport={isGeneratingReport}
         reportResults={reportResults}
         onGenerateReport={generateReport}

@@ -7,13 +7,13 @@ const Dialog = ({ open, onOpenChange, children }) => {
   if (!open) return null; // Agar open nahi hai, kuch render mat karo
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto"> // Full screen overlay
+    <div className="fixed inset-0 z-50 overflow-y-auto"> 
       <div
-        className="fixed inset-0 bg-black/50" // Dark background blur
-        onClick={() => onOpenChange(false)} // Click karne se modal close ho jata hai
+        className="fixed inset-0 bg-black/50" 
+        onClick={() => onOpenChange(false)} 
       />
-      <div className="flex min-h-full items-center justify-center p-4"> // Center alignment
-        <div className="relative z-50">{children}</div> // Modal content yahan aata hai
+      <div className="flex min-h-full items-center justify-center p-4"> 
+        <div className="relative z-50">{children}</div> 
       </div>
     </div>
   );
@@ -25,14 +25,14 @@ const DialogContent = React.forwardRef(
     <div
       ref={ref}
       className={cn(
-        "bg-white rounded-lg shadow-lg p-6 relative animate-fadeIn max-w-2xl w-full mx-4", // White background, rounded, shadow, padding
-        className, // Custom classes add karne ke liye
+        "bg-white rounded-lg shadow-lg p-6 relative animate-fadeIn max-w-2xl w-full mx-4", 
+        className, 
       )}
       {...props}
     >
-      {onClose && ( // Agar onClose prop diya hai, toh close button dikhao
+      {onClose && ( 
         <button
-          onClick={onClose} // Click karne se modal close hota hai
+          onClick={onClose} 
           className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
         >
           <X className="h-4 w-4" /> 
@@ -43,13 +43,13 @@ const DialogContent = React.forwardRef(
     </div>
   ),
 );
-DialogContent.displayName = "DialogContent"; // DevTools me readable naam
+DialogContent.displayName = "DialogContent"; 
 
 // DialogHeader - Modal ka header section
 const DialogHeader = ({ className, ...props }) => (
   <div
     className={cn(
-      "flex flex-col space-y-1.5 text-center sm:text-left mb-4", // Flex column, spacing, alignment
+      "flex flex-col space-y-1.5 text-center sm:text-left mb-4", 
       className,
     )}
     {...props}
