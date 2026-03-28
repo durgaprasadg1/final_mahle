@@ -21,17 +21,77 @@ export const useReports = () => {
   );
   const [isGeneratingReport, setIsGeneratingReport] = useState(false);
   const [reportResults, setReportResults] = useState([]);
+  const [reportFilters, setReportFilters] = useState({
+    shift: "",
+    createdBy: "",
+    fractileId: "",
+    cellId: "",
+    tierId: "",
+    batchInShift: "",
+  });
+
+  const periodBasedTypes = ["daily", "weekly", "monthly"];
+  const isPeriodBasedType = periodBasedTypes.includes(reportType);
+
+  const buildReportTypeLabel = () => {
+    const labels = {
+      daily: "Daily",
+      weekly: "Weekly",
+      monthly: "Monthly",
+      shiftwise: "Shiftwise",
+      created_by: "Created By",
+      independent_fractile: "Independent Fractile",
+      cell: "Cell",
+      tier: "Tier",
+      batchwise: "Batchwise",
+    };
+
+    return labels[reportType] || reportType;
+  };
 
   const buildReportPeriodLabel = () => {
     if (reportType === "daily") {
       return reportDate;
     }
 
-    if (reportType === "range" || reportType === "custom") {
+    if (!isPeriodBasedType) {
       return `${reportDateFrom} to ${reportDateTo}`;
     }
 
     return reportDate;
+  };
+
+  const buildAdvancedReportParams = () => {
+    const params = {};
+
+    if (reportType === "shiftwise" && reportFilters.shift) {
+      params.shift = reportFilters.shift;
+    }
+
+    if (reportType === "created_by" && reportFilters.createdBy) {
+      params.created_by_name = reportFilters.createdBy;
+    }
+
+    if (
+      ["independent_fractile", "cell", "tier"].includes(reportType) &&
+      reportFilters.fractileId
+    ) {
+      params.fractile_id = reportFilters.fractileId;
+    }
+
+    if (["cell", "tier"].includes(reportType) && reportFilters.cellId) {
+      params.cell_id = reportFilters.cellId;
+    }
+
+    if (reportType === "tier" && reportFilters.tierId) {
+      params.tier_id = reportFilters.tierId;
+    }
+
+    if (reportType === "batchwise" && reportFilters.batchInShift) {
+      params.batch_in_shift = reportFilters.batchInShift;
+    }
+
+    return params;
   };
 
   // Generate report
@@ -65,19 +125,31 @@ export const useReports = () => {
         );
         dateFrom = firstDay.toISOString().split("T")[0];
         dateTo = lastDay.toISOString().split("T")[0];
-      } else if (reportType === "custom" || reportType === "range") {
+      } else {
         dateFrom = reportDateFrom;
         dateTo = reportDateTo;
+
+        if (!dateFrom || !dateTo) {
+          toast.warning("Please select both From Date and To Date");
+          return;
+        }
+
+        if (new Date(dateFrom) > new Date(dateTo)) {
+          toast.warning("From Date cannot be after To Date");
+          return;
+        }
       }
 
       const response = await batchAPI.getAll({
         date_from: dateFrom,
         date_to: dateTo,
+        ...buildAdvancedReportParams(),
         limit: 1000,
       });
 
-      setReportResults(response.data.data);
-      if (response.data.data.length === 0) {
+      const apiResults = response.data.data || [];
+      setReportResults(apiResults);
+      if (apiResults.length === 0) {
         toast.warning("No batches found for the selected period");
       }
     } catch (error) {
@@ -133,7 +205,7 @@ export const useReports = () => {
     link.setAttribute("href", encodedUri);
     link.setAttribute(
       "download",
-      `Production_Report_${reportType}_${buildReportPeriodLabel().replace(/\s+/g, "_")}.csv`,
+      `Production_Report_${buildReportTypeLabel().replace(/\s+/g, "_")}_${buildReportPeriodLabel().replace(/\s+/g, "_")}.csv`,
     );
     document.body.appendChild(link);
     link.click();
@@ -158,7 +230,7 @@ export const useReports = () => {
     doc.setFontSize(16);
     doc.text(title, 40, 40);
     doc.setFontSize(10);
-    doc.text(`Type: ${reportType.toUpperCase()}`, 40, 58);
+    doc.text(`Type: ${buildReportTypeLabel()}`, 40, 58);
     doc.text(`Period: ${period}`, 200, 58);
     doc.text(`Total Batches: ${reportResults.length}`, 40, 74);
     doc.text(`Total Quantity: ${totalQuantity}`, 200, 74);
@@ -187,7 +259,7 @@ export const useReports = () => {
     });
 
     doc.save(
-      `Production_Report_${reportType}_${period.replace(/\s+/g, "_")}.pdf`,
+      `Production_Report_${buildReportTypeLabel().replace(/\s+/g, "_")}_${period.replace(/\s+/g, "_")}.pdf`,
     );
   };
 
@@ -200,6 +272,8 @@ export const useReports = () => {
     setReportDateFrom,
     reportDateTo,
     setReportDateTo,
+    reportFilters,
+    setReportFilters,
     isGeneratingReport,
     reportResults,
     generateReport,

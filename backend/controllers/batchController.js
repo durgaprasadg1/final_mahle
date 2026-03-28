@@ -223,8 +223,20 @@ class BatchController {
   // Get all batches
   static async getAllBatches(req, res) {
     try {
-      const { product_id, shift, status, date_from, date_to, limit } =
-        req.query;
+      const {
+        product_id,
+        shift,
+        status,
+        date_from,
+        date_to,
+        limit,
+        created_by,
+        created_by_name,
+        batch_in_shift,
+        fractile_id,
+        cell_id,
+        tier_id,
+      } = req.query;
       const filters = {};
 
       // If user is not admin, filter by their unit
@@ -240,6 +252,12 @@ class BatchController {
       if (date_from) filters.date_from = date_from;
       if (date_to) filters.date_to = date_to;
       if (limit) filters.limit = parseInt(limit);
+      if (created_by) filters.created_by = parseInt(created_by);
+      if (created_by_name) filters.created_by_name = created_by_name;
+      if (batch_in_shift) filters.batch_in_shift = parseInt(batch_in_shift);
+      if (fractile_id) filters.fractile_id = parseInt(fractile_id);
+      if (cell_id) filters.cell_id = parseInt(cell_id);
+      if (tier_id) filters.tier_id = parseInt(tier_id);
 
       const batches = await Batch.findAll(filters);
 
