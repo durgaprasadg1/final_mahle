@@ -41,6 +41,8 @@ const UserDashboard = () => {
   const {
     reportType,
     setReportType,
+    reportDuration,
+    setReportDuration,
     reportDate,
     setReportDate,
     reportDateFrom,
@@ -116,6 +118,8 @@ const UserDashboard = () => {
         onClose={handleCloseReports}
         reportType={reportType}
         setReportType={setReportType}
+        reportDuration={reportDuration}
+        setReportDuration={setReportDuration}
         reportDate={reportDate}
         setReportDate={setReportDate}
         reportDateFrom={reportDateFrom}

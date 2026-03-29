@@ -9,7 +9,8 @@ import autoTable from "jspdf-autotable";
  * Custom hook for report generation
  */
 export const useReports = () => {
-  const [reportType, setReportType] = useState("daily");
+  const [reportType, setReportType] = useState("production");
+  const [reportDuration, setReportDuration] = useState("daily");
   const [reportDate, setReportDate] = useState(
     new Date().toISOString().split("T")[0],
   );
@@ -30,31 +31,38 @@ export const useReports = () => {
     batchInShift: "",
   });
 
-  const periodBasedTypes = ["daily", "weekly", "monthly"];
-  const isPeriodBasedType = periodBasedTypes.includes(reportType);
+  const periodBasedDurations = ["daily", "weekly", "monthly", "yearly"];
+  const isPeriodBasedDuration = periodBasedDurations.includes(reportDuration);
 
   const buildReportTypeLabel = () => {
     const labels = {
-      daily: "Daily",
-      weekly: "Weekly",
-      monthly: "Monthly",
-      shiftwise: "Shiftwise",
-      created_by: "Created By",
-      independent_fractile: "Independent Fractile",
-      cell: "Cell",
-      tier: "Tier",
+      production: "Production",
+      fractile: "Fractilewise",
+      cells: "Cellwise",
+      tiers: "Tierwise",
       batchwise: "Batchwise",
     };
 
     return labels[reportType] || reportType;
   };
 
+  const buildReportDurationLabel = () => {
+    const labels = {
+      daily: "Daily",
+      weekly: "Weekly",
+      monthly: "Monthly",
+      yearly: "Yearly",
+    };
+
+    return labels[reportDuration] || reportDuration;
+  };
+
   const buildReportPeriodLabel = () => {
-    if (reportType === "daily") {
+    if (reportDuration === "daily") {
       return reportDate;
     }
 
-    if (!isPeriodBasedType) {
+    if (!isPeriodBasedDuration) {
       return `${reportDateFrom} to ${reportDateTo}`;
     }
 
@@ -64,27 +72,25 @@ export const useReports = () => {
   const buildAdvancedReportParams = () => {
     const params = {};
 
-    if (reportType === "shiftwise" && reportFilters.shift) {
-      params.shift = reportFilters.shift;
-    }
-
-    if (reportType === "created_by" && reportFilters.createdBy) {
-      params.created_by_name = reportFilters.createdBy;
-    }
-
-    if (
-      ["independent_fractile", "cell", "tier"].includes(reportType) &&
-      reportFilters.fractileId
-    ) {
+    if (reportType === "fractile" && reportFilters.fractileId) {
       params.fractile_id = reportFilters.fractileId;
     }
 
-    if (["cell", "tier"].includes(reportType) && reportFilters.cellId) {
-      params.cell_id = reportFilters.cellId;
+    if (reportType === "cells" && reportFilters.fractileId) {
+      params.fractile_id = reportFilters.fractileId;
+      if (reportFilters.cellId) {
+        params.cell_id = reportFilters.cellId;
+      }
     }
 
-    if (reportType === "tier" && reportFilters.tierId) {
-      params.tier_id = reportFilters.tierId;
+    if (reportType === "tiers" && reportFilters.fractileId) {
+      params.fractile_id = reportFilters.fractileId;
+      if (reportFilters.cellId) {
+        params.cell_id = reportFilters.cellId;
+      }
+      if (reportFilters.tierId) {
+        params.tier_id = reportFilters.tierId;
+      }
     }
 
     if (reportType === "batchwise" && reportFilters.batchInShift) {
@@ -101,10 +107,10 @@ export const useReports = () => {
       let dateFrom, dateTo;
       const selectedDate = new Date(reportDate);
 
-      if (reportType === "daily") {
+      if (reportDuration === "daily") {
         dateFrom = reportDate;
         dateTo = reportDate;
-      } else if (reportType === "weekly") {
+      } else if (reportDuration === "weekly") {
         // Start from Monday
         const day = selectedDate.getDay();
         const diff = selectedDate.getDate() - day + (day === 0 ? -6 : 1);
@@ -112,7 +118,7 @@ export const useReports = () => {
         const end = new Date(selectedDate.setDate(diff + 6));
         dateFrom = start.toISOString().split("T")[0];
         dateTo = end.toISOString().split("T")[0];
-      } else if (reportType === "monthly") {
+      } else if (reportDuration === "monthly") {
         const firstDay = new Date(
           selectedDate.getFullYear(),
           selectedDate.getMonth(),
@@ -123,6 +129,11 @@ export const useReports = () => {
           selectedDate.getMonth() + 1,
           0,
         );
+        dateFrom = firstDay.toISOString().split("T")[0];
+        dateTo = lastDay.toISOString().split("T")[0];
+      } else if (reportDuration === "yearly") {
+        const firstDay = new Date(selectedDate.getFullYear(), 0, 1);
+        const lastDay = new Date(selectedDate.getFullYear(), 11, 31);
         dateFrom = firstDay.toISOString().split("T")[0];
         dateTo = lastDay.toISOString().split("T")[0];
       } else {
@@ -266,6 +277,8 @@ export const useReports = () => {
   return {
     reportType,
     setReportType,
+    reportDuration,
+    setReportDuration,
     reportDate,
     setReportDate,
     reportDateFrom,

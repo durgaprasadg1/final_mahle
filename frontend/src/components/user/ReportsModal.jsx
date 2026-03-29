@@ -16,6 +16,8 @@ export const ReportsModal = ({
   onClose,
   reportType,
   setReportType,
+  reportDuration,
+  setReportDuration,
   reportDate,
   setReportDate,
   reportDateFrom,
@@ -33,8 +35,8 @@ export const ReportsModal = ({
   onDownloadExcel,
   onDownloadPDF,
 }) => {
-  const isPeriodBasedType = ["daily", "weekly", "monthly"].includes(
-    reportType,
+  const isPeriodBasedDuration = ["daily", "weekly", "monthly", "yearly"].includes(
+    reportDuration,
   );
 
   const handleClose = () => {
@@ -110,33 +112,58 @@ export const ReportsModal = ({
         </DialogHeader>
         <div className="space-y-6 mt-4">
           <div className="grid grid-cols-1 gap-4 p-4 bg-gray-50 rounded-lg">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label>Report Type</Label>
                 <Select
                   value={reportType}
-                  onChange={(e) => setReportType(e.target.value)}
+                  onChange={(e) => {
+                    setReportType(e.target.value);
+                    setReportFilters({
+                      shift: "",
+                      createdBy: "",
+                      fractileId: "",
+                      cellId: "",
+                      tierId: "",
+                      batchInShift: "",
+                    });
+                  }}
+                >
+                  <option value="production">Production</option>
+                  <option value="fractile">Fractile</option>
+                  <option value="cells">Cells</option>
+                  <option value="tiers">Tiers</option>
+                  <option value="batchwise">Batchwise</option>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Duration</Label>
+                <Select
+                  value={reportDuration}
+                  onChange={(e) => setReportDuration(e.target.value)}
                 >
                   <option value="daily">Daily</option>
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
-                  <option value="shiftwise">Shiftwise</option>
-                  <option value="created_by">Created By</option>
-                  <option value="independent_fractile">Fractilewise</option>
-                  <option value="cell">Cellwise</option>
-                  <option value="tier">Tierwise</option>
-                  {/* <option value="batchwise">Batchwise</option> */}
+                  <option value="yearly">Yearly</option>
                 </Select>
               </div>
-              {isPeriodBasedType ? (
+              {isPeriodBasedDuration ? (
                 <div className="space-y-2">
                   <Label>
-                    Select {reportType === "monthly" ? "Month" : "Date"}
+                    Select {reportDuration === "monthly" || reportDuration === "yearly" ? (reportDuration === "monthly" ? "Month" : "Year") : "Date"}
                   </Label>
                   <Input
-                    type={reportType === "monthly" ? "month" : "date"}
-                    value={reportDate}
-                    onChange={(e) => setReportDate(e.target.value)}
+                    type={reportDuration === "yearly" ? "number" : reportDuration === "monthly" ? "month" : "date"}
+                    value={reportDuration === "yearly" ? reportDate.split("-")[0] : reportDate}
+                    onChange={(e) => {
+                      if (reportDuration === "yearly") {
+                        setReportDate(`${e.target.value}-01-01`);
+                      } else {
+                        setReportDate(e.target.value);
+                      }
+                    }}
+                    {...(reportDuration === "yearly" && { min: "2000", max: "2100" })}
                   />
                 </div>
               ) : (
@@ -161,50 +188,32 @@ export const ReportsModal = ({
               )}
             </div>
 
-            {reportType === "shiftwise" && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Shift</Label>
-                  <Select
-                    value={reportFilters.shift}
-                    onChange={(e) => handleFilterChange("shift", e.target.value)}
-                  >
-                    <option value="">All Shifts</option>
-                    <option value="morning">Morning</option>
-                    <option value="afternoon">Afternoon</option>
-                    <option value="night">Night</option>
-                  </Select>
-                </div>
-              </div>
-            )}
-
-            {reportType === "created_by" && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Created By</Label>
-                  <Input
-                    type="text"
-                    placeholder="Enter worker name"
-                    value={reportFilters.createdBy}
-                    onChange={(e) =>
-                      handleFilterChange("createdBy", e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-            )}
-
-            {(reportType === "independent_fractile" ||
-              reportType === "cell" ||
-              reportType === "tier") && (
+            {reportType === "fractile" && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Fractile</Label>
                   <Select
                     value={reportFilters.fractileId}
-                    onChange={(e) =>
-                      handleFilterChange("fractileId", e.target.value)
-                    }
+                    onChange={(e) => handleFilterChange("fractileId", e.target.value)}
+                  >
+                    <option value="">All Fractiles</option>
+                    {(allFractiles || []).map((fractile) => (
+                      <option key={fractile.id} value={fractile.id}>
+                        {fractile.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+            )}
+
+            {reportType === "cells" && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Fractile</Label>
+                  <Select
+                    value={reportFilters.fractileId}
+                    onChange={(e) => handleFilterChange("fractileId", e.target.value)}
                   >
                     <option value="">All Fractiles</option>
                     {(allFractiles || []).map((fractile) => (
@@ -215,39 +224,69 @@ export const ReportsModal = ({
                   </Select>
                 </div>
 
-                {(reportType === "cell" || reportType === "tier") && (
-                  <div className="space-y-2">
-                    <Label>Cell</Label>
-                    <Select
-                      value={reportFilters.cellId}
-                      onChange={(e) => handleFilterChange("cellId", e.target.value)}
-                    >
-                      <option value="">All Cells</option>
-                      {filteredCells.map((cell) => (
-                        <option key={cell.id} value={cell.id}>
-                          {cell.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <Label>Cell</Label>
+                  <Select
+                    value={reportFilters.cellId}
+                    onChange={(e) => handleFilterChange("cellId", e.target.value)}
+                  >
+                    <option value="">All Cells</option>
+                    {filteredCells.map((cell) => (
+                      <option key={cell.id} value={cell.id}>
+                        {cell.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+            )}
 
-                {reportType === "tier" && (
-                  <div className="space-y-2">
-                    <Label>Tier</Label>
-                    <Select
-                      value={reportFilters.tierId}
-                      onChange={(e) => handleFilterChange("tierId", e.target.value)}
-                    >
-                      <option value="">All Tiers</option>
-                      {filteredTiers.map((tier) => (
-                        <option key={tier.id} value={tier.id}>
-                          {tier.name}
-                        </option>
-                      ))}
-                    </Select>
-                  </div>
-                )}
+            {reportType === "tiers" && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div className="space-y-2">
+                  <Label>Fractile</Label>
+                  <Select
+                    value={reportFilters.fractileId}
+                    onChange={(e) => handleFilterChange("fractileId", e.target.value)}
+                  >
+                    <option value="">All Fractiles</option>
+                    {(allFractiles || []).map((fractile) => (
+                      <option key={fractile.id} value={fractile.id}>
+                        {fractile.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Cell</Label>
+                  <Select
+                    value={reportFilters.cellId}
+                    onChange={(e) => handleFilterChange("cellId", e.target.value)}
+                  >
+                    <option value="">All Cells</option>
+                    {filteredCells.map((cell) => (
+                      <option key={cell.id} value={cell.id}>
+                        {cell.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Tier</Label>
+                  <Select
+                    value={reportFilters.tierId}
+                    onChange={(e) => handleFilterChange("tierId", e.target.value)}
+                  >
+                    <option value="">All Tiers</option>
+                    {filteredTiers.map((tier) => (
+                      <option key={tier.id} value={tier.id}>
+                        {tier.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
               </div>
             )}
 
