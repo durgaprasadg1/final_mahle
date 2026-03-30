@@ -52,6 +52,7 @@ export const useReports = () => {
       weekly: "Weekly",
       monthly: "Monthly",
       yearly: "Yearly",
+      custom: "Custom Range",
     };
 
     return labels[reportDuration] || reportDuration;
@@ -107,7 +108,20 @@ export const useReports = () => {
       let dateFrom, dateTo;
       const selectedDate = new Date(reportDate);
 
-      if (reportDuration === "daily") {
+      if (reportDuration === "custom") {
+        dateFrom = reportDateFrom;
+        dateTo = reportDateTo;
+
+        if (!dateFrom || !dateTo) {
+          toast.warning("Please select both From Date and To Date");
+          return;
+        }
+
+        if (new Date(dateFrom) > new Date(dateTo)) {
+          toast.warning("From Date cannot be after To Date");
+          return;
+        }
+      } else if (reportDuration === "daily") {
         dateFrom = reportDate;
         dateTo = reportDate;
       } else if (reportDuration === "weekly") {

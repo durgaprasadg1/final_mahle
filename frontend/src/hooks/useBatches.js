@@ -158,7 +158,7 @@ export const useBatches = () => {
       await batchAPI.delete(batchId);
       toast.success("Batch deleted successfully");
       await fetchBatches();
-      return true;git 
+      return true;
     } catch (error) {
       toast.error(error.response?.data?.message || "Failed to delete batch");
       return false;

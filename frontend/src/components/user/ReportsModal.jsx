@@ -38,6 +38,7 @@ export const ReportsModal = ({
   const isPeriodBasedDuration = ["daily", "weekly", "monthly", "yearly"].includes(
     reportDuration,
   );
+  const shouldUseDateRange = reportDuration === "custom";
 
   const handleClose = () => {
     onClose();
@@ -146,27 +147,10 @@ export const ReportsModal = ({
                   <option value="weekly">Weekly</option>
                   <option value="monthly">Monthly</option>
                   <option value="yearly">Yearly</option>
+                  <option value="custom">Custom Range</option>
                 </Select>
               </div>
-              {isPeriodBasedDuration ? (
-                <div className="space-y-2">
-                  <Label>
-                    Select {reportDuration === "monthly" || reportDuration === "yearly" ? (reportDuration === "monthly" ? "Month" : "Year") : "Date"}
-                  </Label>
-                  <Input
-                    type={reportDuration === "yearly" ? "number" : reportDuration === "monthly" ? "month" : "date"}
-                    value={reportDuration === "yearly" ? reportDate.split("-")[0] : reportDate}
-                    onChange={(e) => {
-                      if (reportDuration === "yearly") {
-                        setReportDate(`${e.target.value}-01-01`);
-                      } else {
-                        setReportDate(e.target.value);
-                      }
-                    }}
-                    {...(reportDuration === "yearly" && { min: "2000", max: "2100" })}
-                  />
-                </div>
-              ) : (
+              {shouldUseDateRange ? (
                 <>
                   <div className="space-y-2">
                     <Label>From Date</Label>
@@ -185,6 +169,24 @@ export const ReportsModal = ({
                     />
                   </div>
                 </>
+              ) : (
+                <div className="space-y-2">
+                  <Label>
+                    Select {reportDuration === "monthly" || reportDuration === "yearly" ? (reportDuration === "monthly" ? "Month" : "Year") : "Date"}
+                  </Label>
+                  <Input
+                    type={reportDuration === "yearly" ? "number" : reportDuration === "monthly" ? "month" : "date"}
+                    value={reportDuration === "yearly" ? reportDate.split("-")[0] : reportDate}
+                    onChange={(e) => {
+                      if (reportDuration === "yearly") {
+                        setReportDate(`${e.target.value}-01-01`);
+                      } else {
+                        setReportDate(e.target.value);
+                      }
+                    }}
+                    {...(reportDuration === "yearly" && { min: "2000", max: "2100" })}
+                  />
+                </div>
               )}
             </div>
 
