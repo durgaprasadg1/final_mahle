@@ -25,6 +25,7 @@ export const useReports = () => {
   const [reportFilters, setReportFilters] = useState({
     shift: "",
     createdBy: "",
+    productName: "",
     fractileId: "",
     cellId: "",
     tierId: "",
@@ -37,6 +38,8 @@ export const useReports = () => {
   const buildReportTypeLabel = () => {
     const labels = {
       production: "Production",
+      createdby: "Created By",
+      productwise: "Productwise",
       fractile: "Fractilewise",
       cells: "Cellwise",
       tiers: "Tierwise",
@@ -96,6 +99,14 @@ export const useReports = () => {
 
     if (reportType === "batchwise" && reportFilters.batchInShift) {
       params.batch_in_shift = reportFilters.batchInShift;
+    }
+
+    if (reportType === "createdby" && reportFilters.createdBy?.trim()) {
+      params.created_by_name = reportFilters.createdBy.trim();
+    }
+
+    if (reportType === "productwise" && reportFilters.productName?.trim()) {
+      params.product_name = reportFilters.productName.trim();
     }
 
     return params;
@@ -163,6 +174,16 @@ export const useReports = () => {
           toast.warning("From Date cannot be after To Date");
           return;
         }
+      }
+
+      if (reportType === "createdby" && !reportFilters.createdBy?.trim()) {
+        toast.warning("Please enter worker name");
+        return;
+      }
+
+      if (reportType === "productwise" && !reportFilters.productName?.trim()) {
+        toast.warning("Please enter product name");
+        return;
       }
 
       const response = await batchAPI.getAll({
@@ -243,9 +264,18 @@ export const useReports = () => {
       return;
     }
 
+    const buildHierarchyLabel = (batch) => {
+      const fractile = batch.fractile_names || "-";
+      const cell = batch.cell_names || "-";
+      const tier = batch.tier_names || "-";
+      return `F: ${fractile} | C: ${cell} | T: ${tier}`;
+    };
+
     const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
     const title = "Production Report";
     const period = buildReportPeriodLabel();
+    const selectedWorkerName =
+      reportType === "createdby" ? reportFilters.createdBy?.trim() : "";
     const totalQuantity = reportResults.reduce(
       (sum, batch) => sum + (Number(batch.quantity_produced) || 0),
       0,
@@ -257,25 +287,42 @@ export const useReports = () => {
     doc.setFontSize(10);
     doc.text(`Type: ${buildReportTypeLabel()}`, 40, 58);
     doc.text(`Period: ${period}`, 200, 58);
+    if (selectedWorkerName) {
+      doc.text(`Worker: ${selectedWorkerName}`, 420, 58);
+    }
     doc.text(`Total Batches: ${reportResults.length}`, 40, 74);
     doc.text(`Total Quantity: ${totalQuantity}`, 200, 74);
     doc.text(`Unique Products: ${uniqueProducts}`, 360, 74);
 
     const tableRows = reportResults.map((batch) => [
-      formatDateOnly(batch.created_at),
-      batch.shift || "-",
-      batch.product_name || "-",
-      String(batch.quantity_produced ?? "-"),
-      batch.start_time || "-",
-      batch.end_time || "-",
-      batch.had_delay || "no",
-      batch.created_by_name || "-",
-      (batch.notes || "-").toString(),
-    ]);
+        formatDateOnly(batch.created_at),
+        batch.shift || "-",
+        batch.product_name || "-",
+        String(batch.quantity_produced ?? "-"),
+        batch.start_time || "-",
+        batch.end_time || "-",
+        batch.had_delay || "no",
+        batch.created_by_name || "-",
+        (batch.notes || "-").toString(),
+        buildHierarchyLabel(batch),
+      ]);
+
+    const tableHead = [
+      "Date",
+      "Shift",
+      "Product",
+      "Qty",
+      "Start",
+      "End",
+      "Delay",
+      "Worker",
+      "Notes",
+      "Fractile/Cell/Tier",
+    ];
 
     autoTable(doc, {
       startY: 90,
-      head: [["Date", "Shift", "Product", "Qty", "Start", "End", "Delay", "Worker", "Notes"]],
+      head: [tableHead],
       body: tableRows,
       styles: { fontSize: 8, cellPadding: 4 },
       headStyles: { fillColor: [37, 99, 235] },

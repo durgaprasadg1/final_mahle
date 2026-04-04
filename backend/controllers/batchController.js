@@ -232,6 +232,7 @@ class BatchController {
         limit,
         created_by,
         created_by_name,
+        product_name,
         batch_in_shift,
         fractile_id,
         cell_id,
@@ -254,6 +255,7 @@ class BatchController {
       if (limit) filters.limit = parseInt(limit);
       if (created_by) filters.created_by = parseInt(created_by);
       if (created_by_name) filters.created_by_name = created_by_name;
+      if (product_name) filters.product_name = product_name;
       if (batch_in_shift) filters.batch_in_shift = parseInt(batch_in_shift);
       if (fractile_id) filters.fractile_id = parseInt(fractile_id);
       if (cell_id) filters.cell_id = parseInt(cell_id);

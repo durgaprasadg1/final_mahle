@@ -29,6 +29,8 @@ export const ReportsModal = ({
   allFractiles,
   allCells,
   allTiers,
+  products,
+  batches,
   isGeneratingReport,
   reportResults,
   onGenerateReport,
@@ -73,6 +75,27 @@ export const ReportsModal = ({
     }
     return allTiers || [];
   }, [allTiers, reportFilters.cellId, reportFilters.fractileId]);
+
+  const productNameSuggestions = useMemo(() => {
+    const names = (products || [])
+      .map((product) => product?.name?.trim())
+      .filter(Boolean);
+
+    return [...new Set(names)].sort((a, b) => a.localeCompare(b));
+  }, [products]);
+
+  const workerNameSuggestions = useMemo(() => {
+    const namesFromBatches = (batches || [])
+      .map((batch) => batch?.created_by_name?.trim())
+      .filter(Boolean);
+    const namesFromReports = (reportResults || [])
+      .map((batch) => batch?.created_by_name?.trim())
+      .filter(Boolean);
+
+    return [...new Set([...namesFromBatches, ...namesFromReports])].sort((a, b) =>
+      a.localeCompare(b),
+    );
+  }, [batches, reportResults]);
 
   const columns = useMemo(
     () => [
@@ -123,6 +146,7 @@ export const ReportsModal = ({
                     setReportFilters({
                       shift: "",
                       createdBy: "",
+                      productName: "",
                       fractileId: "",
                       cellId: "",
                       tierId: "",
@@ -131,6 +155,8 @@ export const ReportsModal = ({
                   }}
                 >
                   <option value="production">Production</option>
+                  <option value="createdby">Created By</option>
+                  <option value="productwise">Product Name</option>
                   <option value="fractile">Fractile</option>
                   <option value="cells">Cells</option>
                   <option value="tiers">Tiers</option>
@@ -305,6 +331,54 @@ export const ReportsModal = ({
                       handleFilterChange("batchInShift", e.target.value)
                     }
                   />
+                </div>
+              </div>
+            )}
+
+            {reportType === "createdby" && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Worker Name</Label>
+                  <Input
+                    type="text"
+                    list="report-worker-name-suggestions"
+                    placeholder="Type or select worker name"
+                    value={reportFilters.createdBy}
+                    onChange={(e) =>
+                      handleFilterChange("createdBy", e.target.value)
+                    }
+                  />
+                  {workerNameSuggestions.length > 0 && (
+                    <datalist id="report-worker-name-suggestions">
+                      {workerNameSuggestions.map((name) => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {reportType === "productwise" && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Product Name</Label>
+                  <Input
+                    type="text"
+                    list="report-product-name-suggestions"
+                    placeholder="Type or select product name"
+                    value={reportFilters.productName}
+                    onChange={(e) =>
+                      handleFilterChange("productName", e.target.value)
+                    }
+                  />
+                  {productNameSuggestions.length > 0 && (
+                    <datalist id="report-product-name-suggestions">
+                      {productNameSuggestions.map((name) => (
+                        <option key={name} value={name} />
+                      ))}
+                    </datalist>
+                  )}
                 </div>
               </div>
             )}

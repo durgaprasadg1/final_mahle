@@ -160,7 +160,22 @@ class Batch {
         p.type as product_type,
         units.name as unit_name, 
         units.code as unit_code,
-        users.name as created_by_name
+        users.name as created_by_name,
+        (
+          SELECT STRING_AGG(DISTINCT pf.name, ', ' ORDER BY pf.name)
+          FROM product_fractiles pf
+          WHERE pf.product_id = b.product_id
+        ) as fractile_names,
+        (
+          SELECT STRING_AGG(DISTINCT pc.name, ', ' ORDER BY pc.name)
+          FROM product_cells pc
+          WHERE pc.product_id = b.product_id
+        ) as cell_names,
+        (
+          SELECT STRING_AGG(DISTINCT pt.name, ', ' ORDER BY pt.name)
+          FROM product_tiers pt
+          WHERE pt.product_id = b.product_id
+        ) as tier_names
       FROM batches b
       LEFT JOIN products p ON b.product_id = p.id
       LEFT JOIN units ON b.unit_id = units.id
@@ -180,6 +195,12 @@ class Batch {
     if (filters.product_id) {
       query += ` AND b.product_id = $${paramCount}`;
       values.push(filters.product_id);
+      paramCount++;
+    }
+
+    if (filters.product_name) {
+      query += ` AND p.name ILIKE $${paramCount}`;
+      values.push(`%${filters.product_name}%`);
       paramCount++;
     }
 
