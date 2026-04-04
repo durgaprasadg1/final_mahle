@@ -6,7 +6,6 @@ import { Label } from "../ui/label";
 import { Select } from "../ui/select";
 import { Textarea } from "../ui/textarea";
 import { toast } from "react-toastify";
-import { formatProductType } from "../../lib/utils";
 import { getPreviousBatchesForProduct } from "../../utils/batchUtils";
 import {
   loadBatchShiftConfigs,
@@ -48,11 +47,6 @@ export const BatchModal = ({
   const [batchTimeSlots, setBatchTimeSlots] = useState([]);
   const [selectedBatchSlots, setSelectedBatchSlots] = useState([]);
   const [batchInterval, setBatchInterval] = useState("hourwise");
-  const [productSearch, setProductSearch] = useState("");
-  const [showProductSuggestions, setShowProductSuggestions] = useState(false);
-
-  const getProductLabel = (product) =>
-    `${product.name} (${formatProductType(product.type)})`;
 
   const [timeValidationError, setTimeValidationError] = useState("");
 
@@ -119,22 +113,6 @@ export const BatchModal = ({
     const crossesMidnight = endHour * 60 + endMin <= startHour * 60 + startMin;
     return `${configuredShift.startTime} - ${configuredShift.endTime}${crossesMidnight ? " (crosses midnight)" : ""}`;
   };
-
-  const filteredProducts = useMemo(() => {
-    const query = productSearch.trim().toLowerCase();
-    const source = products || [];
-
-    if (!query) {
-      return source.slice(0, 8);
-    }
-
-    return source
-      .filter((product) => {
-        const label = getProductLabel(product).toLowerCase();
-        return label.includes(query);
-      })
-      .slice(0, 8);
-  }, [products, productSearch]);
 
   const effectivePlanDate = planDate || new Date().toISOString().split("T")[0];
 
@@ -246,8 +224,6 @@ export const BatchModal = ({
     setSelectedBatchSlots([]);
     setBatchTimeSlots([]);
     setSelectedShiftConfigId("");
-    setProductSearch("");
-    setShowProductSuggestions(false);
     setTimeValidationError("");
   };
 
@@ -268,7 +244,6 @@ export const BatchModal = ({
     const selectedProduct = products.find(
       (product) => String(product.id) === String(batch.product_id),
     );
-    setProductSearch(selectedProduct ? getProductLabel(selectedProduct) : "");
 
     const shiftConfig =
       availableShifts.find((s) => s.backendShift === batch.shift) ||
@@ -429,47 +404,16 @@ export const BatchModal = ({
   };
 
   const handleProductChange = (productId) => {
-    const selectedProduct = products.find(
-      (product) => String(product.id) === String(productId),
-    );
-
     setBatchForm({
       ...batchForm,
       product_id: productId,
     });
-
-    setProductSearch(selectedProduct ? getProductLabel(selectedProduct) : "");
-    setShowProductSuggestions(false);
 
     if (usePreviousBatch) {
       setUsePreviousBatch(false);
       setSelectedPreviousBatchId("");
       setFilteredPreviousBatches([]);
     }
-  };
-
-  const handleProductInputChange = (value) => {
-    setProductSearch(value);
-    setShowProductSuggestions(true);
-
-    const exactMatch = products.find(
-      (product) => getProductLabel(product).toLowerCase() === value.trim().toLowerCase(),
-    );
-
-    setBatchForm((prev) => ({
-      ...prev,
-      product_id: exactMatch ? String(exactMatch.id) : "",
-    }));
-  };
-
-  const handleProductSelect = (product) => {
-    handleProductChange(String(product.id));
-  };
-
-  const handleProductSuggestionMouseDown = (event, product) => {
-    // Select on mousedown so blur on input does not swallow the click.
-    event.preventDefault();
-    handleProductSelect(product);
   };
 
   const handlePreviousBatchToggle = (checked) => {
@@ -549,50 +493,20 @@ export const BatchModal = ({
           {/* Product Selection */}
           <div className="space-y-2">
             <Label htmlFor="batchProduct">Product *</Label>
-            <div className="relative">
-              <Input
-                id="batchProduct"
-                type="text"
-                value={productSearch}
-                onChange={(e) => handleProductInputChange(e.target.value)}
-                onFocus={() => setShowProductSuggestions(true)}
-                onBlur={() => {
-                  setTimeout(() => setShowProductSuggestions(false), 180);
-                }}
-                placeholder="Type product name to search..."
-                disabled={usePreviousBatch}
-                required
-              />
-              <input
-                type="hidden"
-                value={batchForm.product_id}
-                required
-                readOnly
-              />
-
-              {showProductSuggestions && !usePreviousBatch && (
-                <div className="absolute z-50 mt-1 w-full max-h-56 overflow-y-auto rounded-md border border-gray-200 bg-white shadow-lg">
-                  {filteredProducts.length > 0 ? (
-                    filteredProducts.map((product) => (
-                      <button
-                        key={product.id}
-                        type="button"
-                        onMouseDown={(event) =>
-                          handleProductSuggestionMouseDown(event, product)
-                        }
-                        className="w-full px-3 py-2 text-left text-sm hover:bg-blue-50"
-                      >
-                        {getProductLabel(product)}
-                      </button>
-                    ))
-                  ) : (
-                    <div className="px-3 py-2 text-sm text-gray-500">
-                      No matching products found
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+            <Select
+              id="batchProduct"
+              value={batchForm.product_id}
+              onChange={(e) => handleProductChange(e.target.value)}
+              disabled={usePreviousBatch}
+              required
+            >
+              <option value="">Select product</option>
+              {(products || []).map((product) => (
+                <option key={product.id} value={String(product.id)}>
+                  {product.name}
+                </option>
+              ))}
+            </Select>
           </div>
 
           {/* Previous Batch Checkbox */}

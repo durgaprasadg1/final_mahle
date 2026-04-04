@@ -131,6 +131,8 @@ const UserDashboard = () => {
         allFractiles={allFractiles}
         allCells={allCells}
         allTiers={allTiers}
+        products={products}
+        batches={batches}
         isGeneratingReport={isGeneratingReport}
         reportResults={reportResults}
         onGenerateReport={generateReport}
