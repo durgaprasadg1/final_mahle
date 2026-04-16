@@ -234,6 +234,8 @@ class BatchController {
         created_by_name,
         product_name,
         batch_in_shift,
+        slot_start_time,
+        slot_end_time,
         fractile_id,
         cell_id,
         tier_id,
@@ -257,6 +259,8 @@ class BatchController {
       if (created_by_name) filters.created_by_name = created_by_name;
       if (product_name) filters.product_name = product_name;
       if (batch_in_shift) filters.batch_in_shift = parseInt(batch_in_shift);
+      if (slot_start_time) filters.slot_start_time = slot_start_time;
+      if (slot_end_time) filters.slot_end_time = slot_end_time;
       if (fractile_id) filters.fractile_id = parseInt(fractile_id);
       if (cell_id) filters.cell_id = parseInt(cell_id);
       if (tier_id) filters.tier_id = parseInt(tier_id);

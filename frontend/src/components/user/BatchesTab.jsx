@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { formatDateOnly } from "../../lib/utils";
 import { getCreatorName } from "../../utils/batchUtils";
 import { loadBatchShiftConfigs } from "../../utils/shiftUtils";
+import { generateTimeSlots } from "../../utils/timeUtils";
 import { productionPlanAPI } from "../../lib/api";
 import { BatchModal } from "./BatchModal";
 import { DataTable } from "./table";
@@ -59,8 +60,10 @@ export const BatchesTab = ({
   const [planningForm, setPlanningForm] = useState({
     product_id: "",
     shift: "morning",
-    plan_date: new Date().toISOString().split("T")[0],
+    planning_days: "1",
+    planning_dates: [new Date().toISOString().split("T")[0]],
     target_quantity: "",
+    selected_slots: [],
     notes: "",
   });
 
@@ -95,6 +98,24 @@ export const BatchesTab = ({
     const configuredShifts = loadBatchShiftConfigs();
     return configuredShifts.filter((shift) => shift?.isActive !== false);
   };
+
+  const shiftChoices = useMemo(() => getShiftChoices(), []);
+
+  const availablePlanSlots = useMemo(() => {
+    const selectedShiftConfig = shiftChoices.find(
+      (shiftConfig) => String(shiftConfig.backendShift) === String(planningForm.shift),
+    );
+
+    if (!selectedShiftConfig?.startTime || !selectedShiftConfig?.endTime) {
+      return [];
+    }
+
+    return generateTimeSlots(
+      selectedShiftConfig.startTime,
+      selectedShiftConfig.endTime,
+      selectedShiftConfig.timeInterval || "hourwise",
+    );
+  }, [planningForm.shift, shiftChoices]);
 
   const fetchProductionPlans = async (targetDate = todayDate) => {
     if (!canViewPlanningTargets) return;
@@ -152,18 +173,58 @@ export const BatchesTab = ({
     setPlanningForm({
       product_id: "",
       shift: "morning",
-      plan_date: todayDate,
+      planning_days: "1",
+      planning_dates: [todayDate],
       target_quantity: "",
+      selected_slots: [],
       notes: "",
     });
     setShowPlanningDialog(true);
   };
 
+  const addDaysToDateKey = (dateText, daysToAdd) => {
+    const date = new Date(`${dateText}T00:00:00`);
+    if (Number.isNaN(date.getTime())) return todayDate;
+    date.setDate(date.getDate() + daysToAdd);
+    const year = date.getFullYear();
+    const month = `${date.getMonth() + 1}`.padStart(2, "0");
+    const day = `${date.getDate()}`.padStart(2, "0");
+    return `${year}-${month}-${day}`;
+  };
+
+  const syncPlanningDatesCount = (nextCountRaw) => {
+    const parsed = Number(nextCountRaw);
+    const safeCount = Number.isInteger(parsed)
+      ? Math.min(Math.max(parsed, 1), 20)
+      : 1;
+
+    setPlanningForm((prev) => {
+      const nextDates = [...(prev.planning_dates || [])];
+
+      if (nextDates.length === 0) {
+        nextDates.push(todayDate);
+      }
+
+      if (nextDates.length < safeCount) {
+        for (let i = nextDates.length; i < safeCount; i += 1) {
+          const previousDate = nextDates[i - 1] || todayDate;
+          nextDates.push(addDaysToDateKey(previousDate, 1));
+        }
+      }
+
+      return {
+        ...prev,
+        planning_days: String(nextCountRaw),
+        planning_dates: nextDates.slice(0, safeCount),
+      };
+    });
+  };
+
   const handleSavePlan = async (event) => {
     event.preventDefault();
 
-    if (!planningForm.product_id || !planningForm.shift || !planningForm.plan_date) {
-      toast.error("Please select product, shift and plan date");
+    if (!planningForm.product_id || !planningForm.shift) {
+      toast.error("Please select product and shift");
       return;
     }
 
@@ -173,17 +234,60 @@ export const BatchesTab = ({
       return;
     }
 
+    const planningDays = Number(planningForm.planning_days || 1);
+    if (!Number.isInteger(planningDays) || planningDays < 1 || planningDays > 20) {
+      toast.error("Planning days must be between 1 and 20");
+      return;
+    }
+
+    const selectedDates = (planningForm.planning_dates || [])
+      .slice(0, planningDays)
+      .map((dateText) => String(dateText || "").substring(0, 10));
+
+    if (selectedDates.length !== planningDays || selectedDates.some((dateText) => !dateText)) {
+      toast.error(`Please select exactly ${planningDays} plan date${planningDays > 1 ? "s" : ""}`);
+      return;
+    }
+
+    const uniqueDates = new Set(selectedDates);
+    if (uniqueDates.size !== selectedDates.length) {
+      toast.error("Please select unique dates only");
+      return;
+    }
+
     setSavingPlan(true);
     try {
-      await productionPlanAPI.createOrUpdate({
+      const basePayload = {
         product_id: Number(planningForm.product_id),
         shift: planningForm.shift,
-        plan_date: planningForm.plan_date,
         target_quantity: targetQty,
         notes: planningForm.notes,
-      });
+      };
 
-      toast.success("Production target saved");
+      for (const planDate of selectedDates) {
+        if (planningForm.selected_slots.length > 0) {
+          for (const slotValue of planningForm.selected_slots) {
+            const [slot_start_time, slot_end_time] = String(slotValue).split("|");
+            await productionPlanAPI.createOrUpdate({
+              ...basePayload,
+              plan_date: planDate,
+              slot_start_time,
+              slot_end_time,
+            });
+          }
+        } else {
+          await productionPlanAPI.createOrUpdate({
+            ...basePayload,
+            plan_date: planDate,
+          });
+        }
+      }
+
+      toast.success(
+        planningForm.selected_slots.length > 0
+          ? `Slot-wise production targets saved for ${planningDays} day${planningDays > 1 ? "s" : ""}`
+          : `Production target saved for ${planningDays} day${planningDays > 1 ? "s" : ""}`,
+      );
       setShowPlanningDialog(false);
       await fetchProductionPlans(todayDate);
     } catch (error) {
@@ -394,12 +498,32 @@ export const BatchesTab = ({
                 <Select
                   id="planShift"
                   value={planningForm.shift}
-                  onChange={(e) =>
-                    setPlanningForm((prev) => ({ ...prev, shift: e.target.value }))
-                  }
+                  onChange={(e) => {
+                    const nextShift = e.target.value;
+                    const nextShiftConfig = shiftChoices.find(
+                      (shiftConfig) =>
+                        String(shiftConfig.backendShift) === String(nextShift),
+                    );
+                    const nextSlots = generateTimeSlots(
+                      nextShiftConfig?.startTime,
+                      nextShiftConfig?.endTime,
+                      nextShiftConfig?.timeInterval || "hourwise",
+                    );
+                    const allowedSlotValues = new Set(nextSlots.map((slot) => slot.value));
+
+                    setPlanningForm((prev) => {
+                      return {
+                        ...prev,
+                        shift: nextShift,
+                        selected_slots: prev.selected_slots.filter((slot) =>
+                          allowedSlotValues.has(slot),
+                        ),
+                      };
+                    });
+                  }}
                   required
                 >
-                  {getShiftChoices().map((shift) => (
+                  {shiftChoices.map((shift) => (
                     <option key={`plan-${shift.id || shift.backendShift}`} value={shift.backendShift}>
                       {getShiftDisplayName(shift.backendShift)} ({shift.startTime} - {shift.endTime})
                     </option>
@@ -407,17 +531,87 @@ export const BatchesTab = ({
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="planDate">Plan Date *</Label>
+                <Label htmlFor="planningDays">Days (max 20) *</Label>
                 <Input
-                  id="planDate"
-                  type="date"
-                  value={planningForm.plan_date}
-                  onChange={(e) =>
-                    setPlanningForm((prev) => ({ ...prev, plan_date: e.target.value }))
-                  }
+                  id="planningDays"
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={planningForm.planning_days}
+                  onChange={(e) => syncPlanningDatesCount(e.target.value)}
                   required
                 />
               </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Plan Dates *</Label>
+              <div className="grid grid-cols-2 gap-3 max-h-52 overflow-y-auto border rounded-md p-2">
+                {Array.from({
+                  length: Math.min(
+                    Math.max(Number(planningForm.planning_days) || 1, 1),
+                    20,
+                  ),
+                }).map((_, index) => (
+                  <div className="space-y-1" key={`plan-date-${index + 1}`}>
+                    <Label htmlFor={`planDate-${index + 1}`} className="text-xs text-gray-600">
+                      Date {index + 1}
+                    </Label>
+                    <Input
+                      id={`planDate-${index + 1}`}
+                      type="date"
+                      value={planningForm.planning_dates[index] || ""}
+                      onChange={(e) => {
+                        const nextValue = e.target.value;
+                        setPlanningForm((prev) => {
+                          const nextDates = [...(prev.planning_dates || [])];
+                          nextDates[index] = nextValue;
+                          return { ...prev, planning_dates: nextDates };
+                        });
+                      }}
+                      required
+                    />
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Plan Slots (Optional, multi-select)</Label>
+              {availablePlanSlots.length === 0 ? (
+                <p className="text-xs text-gray-500">
+                  No slots configured for selected shift.
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto border rounded-md p-2">
+                  {availablePlanSlots.map((slot) => {
+                    const isChecked = planningForm.selected_slots.includes(slot.value);
+                    return (
+                      <label
+                        key={`plan-slot-${slot.value}`}
+                        className="flex items-center gap-2 text-sm cursor-pointer"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={(e) => {
+                            setPlanningForm((prev) => {
+                              const next = e.target.checked
+                                ? [...prev.selected_slots, slot.value]
+                                : prev.selected_slots.filter((value) => value !== slot.value);
+                              return { ...prev, selected_slots: next };
+                            });
+                          }}
+                        />
+                        <span>{slot.label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              )}
+              <p className="text-xs text-gray-500">
+                Leave empty for shift-wise planning. If slots are selected, target quantity is saved per selected slot.
+              </p>
             </div>
 
             <div className="space-y-2">

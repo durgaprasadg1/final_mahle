@@ -4,7 +4,16 @@ import Product from "../models/Product.js";
 class ProductionPlanController {
   static async createOrUpdatePlan(req, res) {
     try {
-      const { product_id, shift, plan_date, target_quantity, notes, unit_id } = req.body;
+      const {
+        product_id,
+        shift,
+        plan_date,
+        target_quantity,
+        notes,
+        unit_id,
+        slot_start_time,
+        slot_end_time,
+      } = req.body;
 
       if (!product_id || !shift || !plan_date || !target_quantity) {
         return res.status(400).json({
@@ -25,6 +34,30 @@ class ProductionPlanController {
         return res.status(400).json({
           success: false,
           message: "Invalid shift. Must be morning, afternoon, or night",
+        });
+      }
+
+      const hasSlotStart = Boolean(slot_start_time);
+      const hasSlotEnd = Boolean(slot_end_time);
+      if (hasSlotStart !== hasSlotEnd) {
+        return res.status(400).json({
+          success: false,
+          message: "slot_start_time and slot_end_time must be provided together",
+        });
+      }
+
+      const isValidTimeValue = (value) => /^([01]\d|2[0-3]):([0-5]\d)(:[0-5]\d)?$/.test(String(value));
+      if (hasSlotStart && !isValidTimeValue(slot_start_time)) {
+        return res.status(400).json({
+          success: false,
+          message: "slot_start_time must be in HH:MM or HH:MM:SS format",
+        });
+      }
+
+      if (hasSlotEnd && !isValidTimeValue(slot_end_time)) {
+        return res.status(400).json({
+          success: false,
+          message: "slot_end_time must be in HH:MM or HH:MM:SS format",
         });
       }
 
@@ -53,6 +86,8 @@ class ProductionPlanController {
         shift,
         plan_date,
         target_quantity: Number(target_quantity),
+        slot_start_time: hasSlotStart ? slot_start_time : null,
+        slot_end_time: hasSlotEnd ? slot_end_time : null,
         notes,
         created_by: req.user.id,
         updated_by: req.user.id,
@@ -75,7 +110,16 @@ class ProductionPlanController {
 
   static async getAllPlans(req, res) {
     try {
-      const { product_id, shift, plan_date, date_from, date_to, unit_id } = req.query;
+      const {
+        product_id,
+        shift,
+        plan_date,
+        date_from,
+        date_to,
+        unit_id,
+        slot_start_time,
+        slot_end_time,
+      } = req.query;
       const filters = {};
 
       if (req.user.role !== "admin") {
@@ -89,6 +133,8 @@ class ProductionPlanController {
       if (plan_date) filters.plan_date = plan_date;
       if (date_from) filters.date_from = date_from;
       if (date_to) filters.date_to = date_to;
+      if (slot_start_time) filters.slot_start_time = slot_start_time;
+      if (slot_end_time) filters.slot_end_time = slot_end_time;
 
       const plans = await ProductionPlan.findAll(filters);
 
@@ -109,7 +155,14 @@ class ProductionPlanController {
 
   static async getTargetProgress(req, res) {
     try {
-      const { product_id, shift, plan_date, unit_id } = req.query;
+      const {
+        product_id,
+        shift,
+        plan_date,
+        unit_id,
+        slot_start_time,
+        slot_end_time,
+      } = req.query;
 
       if (!product_id || !shift || !plan_date) {
         return res.status(400).json({
@@ -127,6 +180,8 @@ class ProductionPlanController {
         product_id: Number(product_id),
         shift,
         plan_date,
+        slot_start_time: slot_start_time || null,
+        slot_end_time: slot_end_time || null,
       });
 
       res.json({

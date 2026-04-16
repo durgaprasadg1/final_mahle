@@ -3,6 +3,15 @@ import pool from "../config/database.js";
 class ProductionPlan {
   static tableReady = false;
 
+  static buildSlotKey(slotStartTime, slotEndTime) {
+    if (!slotStartTime || !slotEndTime) {
+      return "shift";
+    }
+    const start = String(slotStartTime).substring(0, 5);
+    const end = String(slotEndTime).substring(0, 5);
+    return `slot:${start}-${end}`;
+  }
+
   static async ensureTableExists() {
     if (this.tableReady) return;
 
@@ -13,13 +22,16 @@ class ProductionPlan {
         product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
         shift shift_type NOT NULL,
         plan_date DATE NOT NULL DEFAULT CURRENT_DATE,
+        slot_start_time TIME,
+        slot_end_time TIME,
+        slot_key VARCHAR(32) NOT NULL DEFAULT 'shift',
         target_quantity INTEGER NOT NULL CHECK (target_quantity > 0),
         notes TEXT,
         created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        CONSTRAINT unique_production_plan UNIQUE(unit_id, product_id, shift, plan_date)
+        CONSTRAINT unique_production_plan UNIQUE(unit_id, product_id, shift, plan_date, slot_key)
       );
 
       CREATE INDEX IF NOT EXISTS idx_production_plans_unit ON production_plans(unit_id);
@@ -28,6 +40,45 @@ class ProductionPlan {
     `;
 
     await pool.query(query);
+
+    await pool.query(`
+      ALTER TABLE production_plans
+      ADD COLUMN IF NOT EXISTS slot_start_time TIME,
+      ADD COLUMN IF NOT EXISTS slot_end_time TIME,
+      ADD COLUMN IF NOT EXISTS slot_key VARCHAR(32) NOT NULL DEFAULT 'shift'
+    `);
+
+    await pool.query(
+      "CREATE INDEX IF NOT EXISTS idx_production_plans_slot ON production_plans(slot_start_time, slot_end_time)",
+    );
+
+    await pool.query(`
+      UPDATE production_plans
+      SET slot_key = CASE
+        WHEN slot_start_time IS NOT NULL AND slot_end_time IS NOT NULL
+          THEN CONCAT('slot:', TO_CHAR(slot_start_time, 'HH24:MI'), '-', TO_CHAR(slot_end_time, 'HH24:MI'))
+        ELSE 'shift'
+      END
+      WHERE slot_key IS NULL OR slot_key = ''
+    `);
+
+    await pool.query("ALTER TABLE production_plans DROP CONSTRAINT IF EXISTS unique_production_plan");
+    await pool.query(`
+      DO $$
+      BEGIN
+        IF NOT EXISTS (
+          SELECT 1
+          FROM pg_constraint
+          WHERE conname = 'unique_production_plan'
+            AND conrelid = 'production_plans'::regclass
+        ) THEN
+          ALTER TABLE production_plans
+          ADD CONSTRAINT unique_production_plan UNIQUE(unit_id, product_id, shift, plan_date, slot_key);
+        END IF;
+      END
+      $$;
+    `);
+
     this.tableReady = true;
   }
 
@@ -39,20 +90,36 @@ class ProductionPlan {
       product_id,
       shift,
       plan_date,
+      slot_start_time,
+      slot_end_time,
       target_quantity,
       notes,
       created_by,
       updated_by,
     } = planData;
 
+    const slotKey = this.buildSlotKey(slot_start_time, slot_end_time);
+
     const query = `
       INSERT INTO production_plans (
-        unit_id, product_id, shift, plan_date, target_quantity, notes, created_by, updated_by
+        unit_id,
+        product_id,
+        shift,
+        plan_date,
+        slot_start_time,
+        slot_end_time,
+        slot_key,
+        target_quantity,
+        notes,
+        created_by,
+        updated_by
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-      ON CONFLICT (unit_id, product_id, shift, plan_date)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+      ON CONFLICT (unit_id, product_id, shift, plan_date, slot_key)
       DO UPDATE
       SET
+        slot_start_time = EXCLUDED.slot_start_time,
+        slot_end_time = EXCLUDED.slot_end_time,
         target_quantity = EXCLUDED.target_quantity,
         notes = EXCLUDED.notes,
         updated_by = EXCLUDED.updated_by,
@@ -65,6 +132,9 @@ class ProductionPlan {
       product_id,
       shift,
       plan_date,
+      slot_start_time || null,
+      slot_end_time || null,
+      slotKey,
       target_quantity,
       notes || null,
       created_by || null,
@@ -93,17 +163,20 @@ class ProductionPlan {
       JOIN units u ON pp.unit_id = u.id
       LEFT JOIN users creator ON pp.created_by = creator.id
       LEFT JOIN users updater ON pp.updated_by = updater.id
-      LEFT JOIN (
-        SELECT
-          product_id,
-          shift,
-          batch_date,
-          SUM(quantity_produced) as total_produced
-        FROM batches
-        GROUP BY product_id, shift, batch_date
-      ) prod ON prod.product_id = pp.product_id
-            AND prod.shift = pp.shift
-            AND prod.batch_date = pp.plan_date
+      LEFT JOIN LATERAL (
+        SELECT COALESCE(SUM(b.quantity_produced), 0) as total_produced
+        FROM batches b
+        WHERE b.product_id = pp.product_id
+          AND b.shift = pp.shift
+          AND b.batch_date = pp.plan_date
+          AND (
+            (pp.slot_start_time IS NULL AND pp.slot_end_time IS NULL)
+            OR (
+              b.start_time = pp.slot_start_time
+              AND b.end_time = pp.slot_end_time
+            )
+          )
+      ) prod ON true
       WHERE 1=1
     `;
 
@@ -134,6 +207,18 @@ class ProductionPlan {
       paramCount++;
     }
 
+    if (filters.slot_start_time) {
+      query += ` AND pp.slot_start_time = $${paramCount}`;
+      values.push(filters.slot_start_time);
+      paramCount++;
+    }
+
+    if (filters.slot_end_time) {
+      query += ` AND pp.slot_end_time = $${paramCount}`;
+      values.push(filters.slot_end_time);
+      paramCount++;
+    }
+
     if (filters.date_from) {
       query += ` AND pp.plan_date >= $${paramCount}`;
       values.push(filters.date_from);
@@ -146,7 +231,7 @@ class ProductionPlan {
       paramCount++;
     }
 
-    query += ` ORDER BY pp.plan_date DESC, pp.shift, pp.created_at DESC`;
+    query += ` ORDER BY pp.plan_date DESC, pp.shift, pp.slot_start_time NULLS FIRST, pp.created_at DESC`;
 
     const result = await pool.query(query, values);
     return result.rows;
@@ -166,8 +251,17 @@ class ProductionPlan {
     return result.rows[0];
   }
 
-  static async getTargetProgress({ unit_id, product_id, shift, plan_date }) {
+  static async getTargetProgress({
+    unit_id,
+    product_id,
+    shift,
+    plan_date,
+    slot_start_time = null,
+    slot_end_time = null,
+  }) {
     await this.ensureTableExists();
+
+    const slotKey = this.buildSlotKey(slot_start_time, slot_end_time);
 
     const query = `
       SELECT
@@ -186,15 +280,26 @@ class ProductionPlan {
         ON b.product_id = pp.product_id
         AND b.shift = pp.shift
         AND b.batch_date = pp.plan_date
+        AND (
+          (pp.slot_start_time IS NULL AND pp.slot_end_time IS NULL)
+          OR (b.start_time = pp.slot_start_time AND b.end_time = pp.slot_end_time)
+        )
       WHERE pp.unit_id = $1
         AND pp.product_id = $2
         AND pp.shift = $3
         AND pp.plan_date = $4
+        AND pp.slot_key = $5
       GROUP BY pp.id, p.name
       LIMIT 1
     `;
 
-    const result = await pool.query(query, [unit_id, product_id, shift, plan_date]);
+    const result = await pool.query(query, [
+      unit_id,
+      product_id,
+      shift,
+      plan_date,
+      slotKey,
+    ]);
     const row = result.rows[0];
 
     if (!row) {

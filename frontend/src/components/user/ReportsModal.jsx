@@ -97,6 +97,46 @@ export const ReportsModal = ({
     );
   }, [batches, reportResults]);
 
+  const formatTimeLabel = (timeValue) => {
+    if (!timeValue) return "";
+    return String(timeValue).substring(0, 5);
+  };
+
+  const shiftOptions = useMemo(() => {
+    const seen = new Set();
+    const fromData = [...(batches || []), ...(reportResults || [])]
+      .map((batch) => String(batch?.shift || "").trim().toLowerCase())
+      .filter(Boolean);
+
+    const defaults = ["morning", "afternoon", "evening", "night"];
+    const all = [...defaults, ...fromData].filter((shift) => {
+      if (seen.has(shift)) return false;
+      seen.add(shift);
+      return true;
+    });
+
+    return all;
+  }, [batches, reportResults]);
+
+  const timeSlotOptions = useMemo(() => {
+    const seen = new Set();
+    const slots = [];
+
+    [...(batches || []), ...(reportResults || [])].forEach((batch) => {
+      const start = formatTimeLabel(batch?.start_time);
+      const end = formatTimeLabel(batch?.end_time);
+      if (!start || !end) return;
+
+      const value = `${start}|${end}`;
+      if (seen.has(value)) return;
+
+      seen.add(value);
+      slots.push({ value, label: `${start} - ${end}` });
+    });
+
+    return slots.sort((a, b) => a.value.localeCompare(b.value));
+  }, [batches, reportResults]);
+
   const columns = useMemo(
     () => [
       {
@@ -145,12 +185,13 @@ export const ReportsModal = ({
                     setReportType(e.target.value);
                     setReportFilters({
                       shift: "",
+                      productId: "",
                       createdBy: "",
                       productName: "",
                       fractileId: "",
                       cellId: "",
                       tierId: "",
-                      batchInShift: "",
+                      timeSlot: "",
                     });
                   }}
                 >
@@ -318,23 +359,6 @@ export const ReportsModal = ({
               </div>
             )}
 
-            {reportType === "batchwise" && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Batch Number In Shift</Label>
-                  <Input
-                    type="number"
-                    min="1"
-                    placeholder="Enter batch number"
-                    value={reportFilters.batchInShift}
-                    onChange={(e) =>
-                      handleFilterChange("batchInShift", e.target.value)
-                    }
-                  />
-                </div>
-              </div>
-            )}
-
             {reportType === "createdby" && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
@@ -382,6 +406,53 @@ export const ReportsModal = ({
                 </div>
               </div>
             )}
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label>Product</Label>
+                <Select
+                  value={reportFilters.productId}
+                  onChange={(e) => handleFilterChange("productId", e.target.value)}
+                >
+                  <option value="">All Products</option>
+                  {(products || []).map((product) => (
+                    <option key={product.id} value={product.id}>
+                      {product.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Shift</Label>
+                <Select
+                  value={reportFilters.shift}
+                  onChange={(e) => handleFilterChange("shift", e.target.value)}
+                >
+                  <option value="">All Shifts</option>
+                  {shiftOptions.map((shift) => (
+                    <option key={shift} value={shift}>
+                      {shift.charAt(0).toUpperCase() + shift.slice(1)}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Time Slot</Label>
+                <Select
+                  value={reportFilters.timeSlot}
+                  onChange={(e) => handleFilterChange("timeSlot", e.target.value)}
+                >
+                  <option value="">All Time Slots</option>
+                  {timeSlotOptions.map((slot) => (
+                    <option key={slot.value} value={slot.value}>
+                      {slot.label}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </div>
 
             <div className="flex items-start space-x-2">
               <Button

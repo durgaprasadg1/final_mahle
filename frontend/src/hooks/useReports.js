@@ -24,12 +24,13 @@ export const useReports = () => {
   const [reportResults, setReportResults] = useState([]);
   const [reportFilters, setReportFilters] = useState({
     shift: "",
+    productId: "",
     createdBy: "",
     productName: "",
     fractileId: "",
     cellId: "",
     tierId: "",
-    batchInShift: "",
+    timeSlot: "",
   });
 
   const periodBasedDurations = ["daily", "weekly", "monthly", "yearly"];
@@ -76,6 +77,24 @@ export const useReports = () => {
   const buildAdvancedReportParams = () => {
     const params = {};
 
+    if (reportFilters.productId) {
+      params.product_id = reportFilters.productId;
+    }
+
+    if (reportFilters.shift) {
+      params.shift = reportFilters.shift;
+    }
+
+    if (reportFilters.timeSlot) {
+      const [slot_start_time, slot_end_time] = String(reportFilters.timeSlot).split("|");
+      if (slot_start_time) {
+        params.slot_start_time = slot_start_time;
+      }
+      if (slot_end_time) {
+        params.slot_end_time = slot_end_time;
+      }
+    }
+
     if (reportType === "fractile" && reportFilters.fractileId) {
       params.fractile_id = reportFilters.fractileId;
     }
@@ -95,10 +114,6 @@ export const useReports = () => {
       if (reportFilters.tierId) {
         params.tier_id = reportFilters.tierId;
       }
-    }
-
-    if (reportType === "batchwise" && reportFilters.batchInShift) {
-      params.batch_in_shift = reportFilters.batchInShift;
     }
 
     if (reportType === "createdby" && reportFilters.createdBy?.trim()) {
