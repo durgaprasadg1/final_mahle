@@ -176,13 +176,16 @@ CREATE TABLE production_plans (
     product_id INTEGER NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     shift shift_type NOT NULL,
     plan_date DATE NOT NULL DEFAULT CURRENT_DATE,
+    slot_start_time TIME,
+    slot_end_time TIME,
+    slot_key VARCHAR(32) NOT NULL DEFAULT 'shift',
     target_quantity INTEGER NOT NULL CHECK (target_quantity > 0),
     notes TEXT,
     created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT unique_production_plan UNIQUE(unit_id, product_id, shift, plan_date)
+    CONSTRAINT unique_production_plan UNIQUE(unit_id, product_id, shift, plan_date, slot_key)
 );
 
 
@@ -206,6 +209,7 @@ CREATE INDEX idx_batches_product_date ON batches(product_id, batch_date);
 CREATE INDEX idx_production_plans_unit ON production_plans(unit_id);
 CREATE INDEX idx_production_plans_product_date ON production_plans(product_id, plan_date);
 CREATE INDEX idx_production_plans_shift_date ON production_plans(shift, plan_date);
+CREATE INDEX idx_production_plans_slot ON production_plans(slot_start_time, slot_end_time);
 
 
 INSERT INTO units (name, code, description, location) VALUES 

@@ -132,7 +132,7 @@ export const BatchModal = ({
 
     const targetDateKey = normalizeDateKey(effectivePlanDate);
 
-    const matchingPlanForDate = (productionPlans || []).find((plan) => {
+    const matchingPlansForDate = (productionPlans || []).filter((plan) => {
       return (
         String(plan.product_id) === selectedProductId &&
         String(plan.shift) === String(selectedShift) &&
@@ -140,15 +140,16 @@ export const BatchModal = ({
       );
     });
 
-    const matchingPlan =
-      matchingPlanForDate ||
-      (productionPlans || []).find(
-        (plan) =>
-          String(plan.product_id) === selectedProductId &&
-          String(plan.shift) === String(selectedShift),
-      );
+    const matchingPlans =
+      matchingPlansForDate.length > 0
+        ? matchingPlansForDate
+        : (productionPlans || []).filter(
+            (plan) =>
+              String(plan.product_id) === selectedProductId &&
+              String(plan.shift) === String(selectedShift),
+          );
 
-    if (!matchingPlan) {
+    if (matchingPlans.length === 0) {
       return null;
     }
 
@@ -178,11 +179,43 @@ export const BatchModal = ({
         : 0;
     const producedWithCurrentEntry = producedQuantity + previewAddition;
 
-    const targetQuantity = Number(matchingPlan.target_quantity || 0);
+    const toSlotValue = (start, end) => {
+      if (!start || !end) return "";
+      return `${String(start).substring(0, 5)}|${String(end).substring(0, 5)}`;
+    };
+
+    const slotPlans = matchingPlans.filter(
+      (plan) => plan.slot_start_time && plan.slot_end_time,
+    );
+    const shiftPlans = matchingPlans.filter(
+      (plan) => !plan.slot_start_time || !plan.slot_end_time,
+    );
+
+    let targetQuantity = 0;
+    if (slotPlans.length > 0) {
+      const selectedSlotSet = new Set(selectedBatchSlots || []);
+      const hasSelectedSlots = selectedSlotSet.size > 0;
+
+      targetQuantity = slotPlans.reduce((total, plan) => {
+        const slotValue = toSlotValue(plan.slot_start_time, plan.slot_end_time);
+        if (hasSelectedSlots && !selectedSlotSet.has(slotValue)) {
+          return total;
+        }
+        return total + Number(plan.target_quantity || 0);
+      }, 0);
+    }
+
+    if (targetQuantity === 0 && shiftPlans.length > 0) {
+      targetQuantity = shiftPlans.reduce(
+        (total, plan) => total + Number(plan.target_quantity || 0),
+        0,
+      );
+    }
+
     return {
       target: targetQuantity,
       produced: producedWithCurrentEntry,
-      remaining: targetQuantity - producedWithCurrentEntry,
+      remaining: Math.max(targetQuantity - producedWithCurrentEntry, 0),
     };
   }, [
     batchForm.product_id,

@@ -234,12 +234,25 @@ class Batch {
       paramCount++;
     }
 
+    if (filters.slot_start_time) {
+      query += ` AND TO_CHAR(b.start_time, 'HH24:MI') = $${paramCount}`;
+      values.push(filters.slot_start_time);
+      paramCount++;
+    }
+
+    if (filters.slot_end_time) {
+      query += ` AND TO_CHAR(b.end_time, 'HH24:MI') = $${paramCount}`;
+      values.push(filters.slot_end_time);
+      paramCount++;
+    }
+
     if (filters.fractile_id) {
       query += `
         AND EXISTS (
           SELECT 1
           FROM product_fractiles pf
-          JOIN fractile_templates ft ON ft.name = pf.name
+          JOIN fractile_templates ft
+            ON LOWER(TRIM(ft.name)) = LOWER(TRIM(pf.name))
           WHERE pf.product_id = b.product_id
             AND ft.id = $${paramCount}
         )
@@ -253,7 +266,8 @@ class Batch {
         AND EXISTS (
           SELECT 1
           FROM product_cells pc
-          JOIN cell_templates ct ON ct.name = pc.name
+          JOIN cell_templates ct
+            ON LOWER(TRIM(ct.name)) = LOWER(TRIM(pc.name))
           WHERE pc.product_id = b.product_id
             AND ct.id = $${paramCount}
         )
@@ -267,7 +281,8 @@ class Batch {
         AND EXISTS (
           SELECT 1
           FROM product_tiers pt
-          JOIN tier_templates tt ON tt.name = pt.name
+          JOIN tier_templates tt
+            ON LOWER(TRIM(tt.name)) = LOWER(TRIM(pt.name))
           WHERE pt.product_id = b.product_id
             AND tt.id = $${paramCount}
         )
@@ -277,13 +292,13 @@ class Batch {
     }
 
     if (filters.date_from) {
-      query += ` AND DATE(b.created_at) >= $${paramCount}`;
+      query += ` AND COALESCE(b.batch_date, DATE(b.created_at)) >= $${paramCount}`;
       values.push(filters.date_from);
       paramCount++;
     }
 
     if (filters.date_to) {
-      query += ` AND DATE(b.created_at) <= $${paramCount}`;
+      query += ` AND COALESCE(b.batch_date, DATE(b.created_at)) <= $${paramCount}`;
       values.push(filters.date_to);
       paramCount++;
     }
