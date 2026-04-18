@@ -26,7 +26,6 @@ export const useReports = () => {
     shift: "",
     productId: "",
     createdBy: "",
-    productName: "",
     fractileId: "",
     cellId: "",
     tierId: "",
@@ -40,7 +39,6 @@ export const useReports = () => {
     const labels = {
       production: "Production",
       createdby: "Created By",
-      productwise: "Productwise",
       fractile: "Fractilewise",
       cells: "Cellwise",
       tiers: "Tierwise",
@@ -120,10 +118,6 @@ export const useReports = () => {
       params.created_by_name = reportFilters.createdBy.trim();
     }
 
-    if (reportType === "productwise" && reportFilters.productName?.trim()) {
-      params.product_name = reportFilters.productName.trim();
-    }
-
     return params;
   };
 
@@ -196,8 +190,8 @@ export const useReports = () => {
         return;
       }
 
-      if (reportType === "productwise" && !reportFilters.productName?.trim()) {
-        toast.warning("Please enter product name");
+      if (reportFilters.timeSlot && !reportFilters.shift) {
+        toast.warning("Please select a shift before selecting a time slot");
         return;
       }
 

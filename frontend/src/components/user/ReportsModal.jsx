@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useEffect, useMemo } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "../ui/dialog";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
@@ -7,6 +7,9 @@ import { Select } from "../ui/select";
 import { Card, CardHeader, CardContent, CardTitle } from "../ui/card";
 import { formatDateOnly } from "../../lib/utils";
 import { DataTable } from "./table";
+import { toast } from "react-toastify";
+import { resolveShiftType } from "../../utils/shiftUtils";
+import { generateTimeSlots } from "../../utils/timeUtils";
 
 /**
  * Reports Modal Component
@@ -52,6 +55,7 @@ export const ReportsModal = ({
       [field]: value,
       ...(field === "fractileId" ? { cellId: "", tierId: "" } : {}),
       ...(field === "cellId" ? { tierId: "" } : {}),
+      ...(field === "shift" ? { timeSlot: "" } : {}),
     }));
   };
 
@@ -76,14 +80,6 @@ export const ReportsModal = ({
     return allTiers || [];
   }, [allTiers, reportFilters.cellId, reportFilters.fractileId]);
 
-  const productNameSuggestions = useMemo(() => {
-    const names = (products || [])
-      .map((product) => product?.name?.trim())
-      .filter(Boolean);
-
-    return [...new Set(names)].sort((a, b) => a.localeCompare(b));
-  }, [products]);
-
   const workerNameSuggestions = useMemo(() => {
     const namesFromBatches = (batches || [])
       .map((batch) => batch?.created_by_name?.trim())
@@ -102,40 +98,158 @@ export const ReportsModal = ({
     return String(timeValue).substring(0, 5);
   };
 
-  const shiftOptions = useMemo(() => {
-    const seen = new Set();
-    const fromData = [...(batches || []), ...(reportResults || [])]
-      .map((batch) => String(batch?.shift || "").trim().toLowerCase())
-      .filter(Boolean);
+  const configuredShifts = useMemo(() => {
+    try {
+      const rawShifts = localStorage.getItem("shifts");
+      if (!rawShifts) return [];
 
-    const defaults = ["morning", "afternoon", "evening", "night"];
-    const all = [...defaults, ...fromData].filter((shift) => {
-      if (seen.has(shift)) return false;
-      seen.add(shift);
-      return true;
+      const parsedShifts = JSON.parse(rawShifts);
+      if (!Array.isArray(parsedShifts) || parsedShifts.length === 0) return [];
+
+      return parsedShifts
+        .filter((shift) => shift?.isActive !== false)
+        .map((shift) => {
+          const value = resolveShiftType(shift);
+          const fallbackLabel = value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
+
+          return {
+            value,
+            label: String(shift?.name || "").trim() || fallbackLabel,
+            startTime: String(shift?.startTime || "").trim(),
+            endTime: String(shift?.endTime || "").trim(),
+            timeInterval: String(shift?.timeInterval || "hourwise").trim(),
+          };
+        })
+        .filter((shift) => Boolean(shift.value));
+    } catch (error) {
+      return [];
+    }
+  }, [isOpen, batches?.length, reportResults?.length]);
+
+  const configuredShiftOptions = useMemo(() => {
+    const optionsByValue = new Map();
+
+    configuredShifts.forEach((shift) => {
+      if (!shift.value || optionsByValue.has(shift.value)) return;
+      optionsByValue.set(shift.value, {
+        value: shift.value,
+        label: shift.label,
+      });
     });
 
-    return all;
-  }, [batches, reportResults]);
+    return Array.from(optionsByValue.values());
+  }, [configuredShifts]);
 
-  const timeSlotOptions = useMemo(() => {
-    const seen = new Set();
-    const slots = [];
+  const shiftOptions = useMemo(() => {
+    const optionsByValue = new Map();
+
+    configuredShiftOptions.forEach((shiftOption) => {
+      optionsByValue.set(shiftOption.value, shiftOption);
+    });
 
     [...(batches || []), ...(reportResults || [])].forEach((batch) => {
-      const start = formatTimeLabel(batch?.start_time);
-      const end = formatTimeLabel(batch?.end_time);
-      if (!start || !end) return;
+      const value = String(batch?.shift || "").trim().toLowerCase();
+      if (!value || optionsByValue.has(value)) return;
 
-      const value = `${start}|${end}`;
-      if (seen.has(value)) return;
-
-      seen.add(value);
-      slots.push({ value, label: `${start} - ${end}` });
+      optionsByValue.set(value, {
+        value,
+        label: value.charAt(0).toUpperCase() + value.slice(1),
+      });
     });
 
-    return slots.sort((a, b) => a.value.localeCompare(b.value));
-  }, [batches, reportResults]);
+    return Array.from(optionsByValue.values());
+  }, [configuredShiftOptions, batches, reportResults]);
+
+  useEffect(() => {
+    if (!reportFilters.shift) return;
+
+    const shiftExists = shiftOptions.some(
+      (shiftOption) => shiftOption.value === reportFilters.shift,
+    );
+
+    if (shiftExists) return;
+
+    setReportFilters((prev) => ({
+      ...prev,
+      shift: "",
+      timeSlot: "",
+    }));
+  }, [reportFilters.shift, setReportFilters, shiftOptions]);
+
+  const shiftTimeSlotOptions = useMemo(() => {
+    const grouped = new Map();
+
+    configuredShifts.forEach((shiftConfig) => {
+      if (!shiftConfig?.value || !shiftConfig?.startTime || !shiftConfig?.endTime) return;
+
+      const generatedSlots = generateTimeSlots(
+        shiftConfig.startTime,
+        shiftConfig.endTime,
+        shiftConfig.timeInterval || "hourwise",
+      );
+
+      if (!grouped.has(shiftConfig.value)) {
+        grouped.set(shiftConfig.value, new Map());
+      }
+
+      generatedSlots.forEach((slot) => {
+        grouped.get(shiftConfig.value).set(slot.value, {
+          value: slot.value,
+          label: slot.label,
+        });
+      });
+    });
+
+    [...(batches || []), ...(reportResults || [])].forEach((batch) => {
+      const shift = String(batch?.shift || "").trim().toLowerCase();
+      const start = formatTimeLabel(batch?.start_time);
+      const end = formatTimeLabel(batch?.end_time);
+      if (!shift || !start || !end) return;
+
+      const value = `${start}|${end}`;
+      const slot = { value, label: `${start} - ${end}` };
+
+      if (!grouped.has(shift)) {
+        grouped.set(shift, new Map());
+      }
+
+      grouped.get(shift).set(value, slot);
+    });
+
+    const result = {};
+    grouped.forEach((slotMap, shift) => {
+      result[shift] = Array.from(slotMap.values()).sort((a, b) =>
+        a.value.localeCompare(b.value),
+      );
+    });
+
+    return result;
+  }, [configuredShifts, batches, reportResults]);
+
+  const timeSlotOptions = useMemo(() => {
+    if (!reportFilters.shift) return [];
+    return shiftTimeSlotOptions[reportFilters.shift] || [];
+  }, [reportFilters.shift, shiftTimeSlotOptions]);
+
+  const handleGenerate = () => {
+    if (reportFilters.timeSlot && !reportFilters.shift) {
+      toast.warning("Please select a shift before selecting a time slot");
+      return;
+    }
+
+    if (reportFilters.shift && reportFilters.timeSlot) {
+      const isValidTimeSlotForShift = (shiftTimeSlotOptions[reportFilters.shift] || []).some(
+        (slot) => slot.value === reportFilters.timeSlot,
+      );
+
+      if (!isValidTimeSlotForShift) {
+        toast.warning("Selected time slot is not valid for the selected shift");
+        return;
+      }
+    }
+
+    onGenerateReport();
+  };
 
   const columns = useMemo(
     () => [
@@ -187,7 +301,6 @@ export const ReportsModal = ({
                       shift: "",
                       productId: "",
                       createdBy: "",
-                      productName: "",
                       fractileId: "",
                       cellId: "",
                       tierId: "",
@@ -197,7 +310,6 @@ export const ReportsModal = ({
                 >
                   <option value="production">Production</option>
                   <option value="createdby">Created By</option>
-                  <option value="productwise">Product Name</option>
                   <option value="fractile">Fractile</option>
                   <option value="cells">Cells</option>
                   <option value="tiers">Tiers</option>
@@ -383,30 +495,6 @@ export const ReportsModal = ({
               </div>
             )}
 
-            {reportType === "productwise" && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Product Name</Label>
-                  <Input
-                    type="text"
-                    list="report-product-name-suggestions"
-                    placeholder="Type or select product name"
-                    value={reportFilters.productName}
-                    onChange={(e) =>
-                      handleFilterChange("productName", e.target.value)
-                    }
-                  />
-                  {productNameSuggestions.length > 0 && (
-                    <datalist id="report-product-name-suggestions">
-                      {productNameSuggestions.map((name) => (
-                        <option key={name} value={name} />
-                      ))}
-                    </datalist>
-                  )}
-                </div>
-              </div>
-            )}
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Product</Label>
@@ -431,8 +519,8 @@ export const ReportsModal = ({
                 >
                   <option value="">All Shifts</option>
                   {shiftOptions.map((shift) => (
-                    <option key={shift} value={shift}>
-                      {shift.charAt(0).toUpperCase() + shift.slice(1)}
+                    <option key={shift.value} value={shift.value}>
+                      {shift.label}
                     </option>
                   ))}
                 </Select>
@@ -443,8 +531,11 @@ export const ReportsModal = ({
                 <Select
                   value={reportFilters.timeSlot}
                   onChange={(e) => handleFilterChange("timeSlot", e.target.value)}
+                  disabled={!reportFilters.shift}
                 >
-                  <option value="">All Time Slots</option>
+                  <option value="">
+                    {reportFilters.shift ? "All Time Slots" : "Select Shift First"}
+                  </option>
                   {timeSlotOptions.map((slot) => (
                     <option key={slot.value} value={slot.value}>
                       {slot.label}
@@ -457,7 +548,7 @@ export const ReportsModal = ({
             <div className="flex items-start space-x-2">
               <Button
                 className="flex-1"
-                onClick={onGenerateReport}
+                onClick={handleGenerate}
                 disabled={isGeneratingReport}
               >
                 {isGeneratingReport ? "Generating..." : "Generate"}
