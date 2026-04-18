@@ -101,6 +101,7 @@ const AdminDashboard = () => {
   const [showDetailsModal, setShowDetailsModal] = useState(false);
   const [currentView, setCurrentView] = useState("admin");
   const [editingPlan, setEditingPlan] = useState(null);
+  const [editingUser, setEditingUser] = useState(null);
 
   const [planForm, setPlanForm] = useState({
     unit_id: "",
@@ -167,8 +168,91 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleCreateUser = async (e) => {
+  const normalizePermissionsForForm = (permissionsInput) => {
+    const flatPermissions = {
+      create: Boolean(permissionsInput?.create),
+      read: Boolean(permissionsInput?.read),
+      update: Boolean(permissionsInput?.update),
+      delete: Boolean(permissionsInput?.delete),
+    };
+
+    const resourcePermissions =
+      permissionsInput?.resources && typeof permissionsInput.resources === "object"
+        ? permissionsInput.resources
+        : {};
+
+    const resolveResourcePermissions = (resourceKey) => {
+      if (
+        resourcePermissions[resourceKey] &&
+        typeof resourcePermissions[resourceKey] === "object"
+      ) {
+        return resourcePermissions[resourceKey];
+      }
+
+      if (resourceKey === "fracticl") {
+        return (
+          resourcePermissions.fracticle ||
+          resourcePermissions.fractile ||
+          resourcePermissions.fracticl
+        );
+      }
+
+      return null;
+    };
+
+    const normalized = {};
+    RESOURCE_ROWS.forEach((resource) => {
+      const resolvedPermissions =
+        resolveResourcePermissions(resource.key) || flatPermissions;
+
+      normalized[resource.key] = {
+        create: Boolean(resolvedPermissions?.create),
+        read: Boolean(resolvedPermissions?.read),
+        update: Boolean(resolvedPermissions?.update),
+        delete: Boolean(resolvedPermissions?.delete),
+      };
+    });
+
+    return normalized;
+  };
+
+  const resetUserForm = () => {
+    setFormData({
+      name: "",
+      email: "",
+      password: "",
+      unit_id: "",
+      permissions: getDefaultPermissionsMatrix(),
+    });
+    setEditingUser(null);
+  };
+
+  const handleOpenCreateUser = () => {
+    resetUserForm();
+    setShowCreateModal(true);
+  };
+
+  const handleOpenEditUser = (targetUser) => {
+    setEditingUser(targetUser);
+    setFormData({
+      name: targetUser.name || "",
+      email: targetUser.email || "",
+      password: "",
+      unit_id: targetUser.unit_id ? String(targetUser.unit_id) : "",
+      permissions: normalizePermissionsForForm(targetUser.permissions),
+    });
+    setShowCreateModal(true);
+  };
+
+  const handleCloseUserModal = () => {
+    setShowCreateModal(false);
+    resetUserForm();
+  };
+
+  const handleSaveUser = async (e) => {
     e.preventDefault();
+    const isEditMode = Boolean(editingUser?.id);
+
     // Basic client-side validations
     if (!formData.name.trim()) {
       toast.error("Full name is required");
@@ -179,28 +263,49 @@ const AdminDashboard = () => {
       toast.error("Please enter a valid email address");
       return;
     }
-    if (!formData.password || formData.password.length < 6) {
-      toast.error("Password must be at least 6 characters");
-      return;
-    }
+
     if (!formData.unit_id) {
       toast.error("Please select a manufacturing unit");
       return;
     }
+
+    if (!isEditMode && (!formData.password || formData.password.length < 6)) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    if (isEditMode && formData.password && formData.password.length < 6) {
+      toast.error("Password must be at least 6 characters long");
+      return;
+    }
+
     try {
-      await userAPI.create(formData);
-      toast.success("User created successfully");
-      setShowCreateModal(false);
-      setFormData({
-        name: "",
-        email: "",
-        password: "",
-        unit_id: "",
-        permissions: getDefaultPermissionsMatrix(),
-      });
+      const payload = {
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        unit_id: formData.unit_id,
+        permissions: formData.permissions,
+      };
+
+      if (formData.password) {
+        payload.password = formData.password;
+      }
+
+      if (isEditMode) {
+        await userAPI.update(editingUser.id, payload);
+        toast.success("User updated successfully");
+      } else {
+        await userAPI.create(payload);
+        toast.success("User created successfully");
+      }
+
+      handleCloseUserModal();
       fetchUsers();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to create user");
+      toast.error(
+        error.response?.data?.message ||
+          `Failed to ${isEditMode ? "update" : "create"} user`,
+      );
     }
   };
 
@@ -405,6 +510,13 @@ const AdminDashboard = () => {
               <Button
                 size="sm"
                 variant="ghost"
+                onClick={() => handleOpenEditUser(user)}
+              >
+                <Edit className="w-4 h-4 text-blue-600" />
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
                 onClick={() => handleToggleStatus(user.id, user.status)}
               >
                 {user.status === "active" ? (
@@ -604,7 +716,7 @@ const AdminDashboard = () => {
                   Manage users across all manufacturing units
                 </CardDescription>
               </div>
-              <Button onClick={() => setShowCreateModal(true)}>
+              <Button onClick={handleOpenCreateUser}>
                 <UserPlus className="w-4 h-4 mr-2" />
                 Create User
               </Button>
@@ -648,15 +760,26 @@ const AdminDashboard = () => {
         </Card>
       </main>
 
-      <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
+      <Dialog
+        open={showCreateModal}
+        onOpenChange={(open) => {
+          if (!open) {
+            handleCloseUserModal();
+            return;
+          }
+          setShowCreateModal(true);
+        }}
+      >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create New User</DialogTitle>
+            <DialogTitle>{editingUser ? "Update User" : "Create New User"}</DialogTitle>
             <DialogDescription>
-              Add a new user to the system with specific unit and permissions
+              {editingUser
+                ? "Update user details and permissions for this account"
+                : "Add a new user to the system with specific unit and permissions"}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleCreateUser} className="space-y-4 mt-4">
+          <form onSubmit={handleSaveUser} className="space-y-4 mt-4">
             {/*  */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -689,16 +812,22 @@ const AdminDashboard = () => {
             {/*  */}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="password">Password *</Label>
+                <Label htmlFor="password">
+                  {editingUser ? "Password (Optional)" : "Password *"}
+                </Label>
                 <Input
                   id="password"
                   type="password"
-                  placeholder="Minimum 6 characters"
+                  placeholder={
+                    editingUser
+                      ? "Leave blank to keep current password"
+                      : "Minimum 6 characters"
+                  }
                   value={formData.password}
                   onChange={(e) =>
                     setFormData({ ...formData, password: e.target.value })
                   }
-                  required
+                  required={!editingUser}
                   minLength={6}
                 />
               </div>
@@ -809,11 +938,13 @@ const AdminDashboard = () => {
               <Button
                 type="button"
                 variant="outline"
-                onClick={() => setShowCreateModal(false)}
+                onClick={handleCloseUserModal}
               >
                 Cancel
               </Button>
-              <Button type="submit">Create User</Button>
+              <Button type="submit">
+                {editingUser ? "Update User" : "Create User"}
+              </Button>
             </div>
           </form>
         </DialogContent>
