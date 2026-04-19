@@ -1,14 +1,14 @@
 import pool from "../config/database.js";
 
 class ProductComponent {
-// ---- Fractiles Ke Liye 
-  
+  // ---- Fractiles Ke Liye
+
   static async createFractile(productId, fractileData) {
     const { name, count, description, cell_id } = fractileData;
     const query = `
       INSERT INTO product_fractiles (product_id, cell_id, name, count, description)
       VALUES ($1, $2, $3, $4, $5)
-      RETURNING *
+      RETURNING id, product_id, cell_id, name, count, description, created_at
     `;
     const values = [productId, cell_id || null, name, count || 0, description];
     const result = await pool.query(query, values);
@@ -17,18 +17,39 @@ class ProductComponent {
 
   static async createFractiles(productId, fractilesArray) {
     if (!fractilesArray || fractilesArray.length === 0) return [];
-    
-    const results = [];
-    for (const fractile of fractilesArray) {
-      const result = await this.createFractile(productId, fractile);
-      results.push(result);
-    }
-    return results;
+
+    // Ek hi query me bulk insert, loop avoid kar rahe hain
+    const placeholders = [];
+    const values = [];
+    let paramCount = 1;
+
+    fractilesArray.forEach((fractile) => {
+      placeholders.push(
+        `($${paramCount++}, $${paramCount++}, $${paramCount++}, $${paramCount++}, $${paramCount++})`,
+      );
+      values.push(
+        productId,
+        fractile.cell_id || null,
+        fractile.name,
+        fractile.count || 0,
+        fractile.description ?? null,
+      );
+    });
+
+    const query = `
+      INSERT INTO product_fractiles (product_id, cell_id, name, count, description)
+      VALUES ${placeholders.join(", ")}
+      RETURNING id, product_id, cell_id, name, count, description, created_at
+    `;
+
+    const result = await pool.query(query, values);
+    return result.rows;
   }
 
   static async getFractilesByProduct(productId) {
     const query = `
-      SELECT * FROM product_fractiles
+      SELECT id, product_id, cell_id, name, count, description, created_at
+      FROM product_fractiles
       WHERE product_id = $1
       ORDER BY name
     `;
@@ -67,7 +88,7 @@ class ProductComponent {
       UPDATE product_fractiles
       SET ${fields.join(", ")}
       WHERE id = $${paramCount}
-      RETURNING *
+      RETURNING id, product_id, cell_id, name, count, description, created_at
     `;
 
     const result = await pool.query(query, values);
@@ -86,13 +107,13 @@ class ProductComponent {
   }
 
   // cells ke Liye ...
-  
+
   static async createCell(productId, cellData) {
     const { name, count, description, tier_id } = cellData;
     const query = `
       INSERT INTO product_cells (product_id, tier_id, name, count, description)
       VALUES ($1, $2, $3, $4, $5)
-      RETURNING *
+      RETURNING id, product_id, tier_id, name, count, description, created_at
     `;
     const values = [productId, tier_id || null, name, count || 0, description];
     const result = await pool.query(query, values);
@@ -101,18 +122,39 @@ class ProductComponent {
 
   static async createCells(productId, cellsArray) {
     if (!cellsArray || cellsArray.length === 0) return [];
-    
-    const results = [];
-    for (const cell of cellsArray) {
-      const result = await this.createCell(productId, cell);
-      results.push(result);
-    }
-    return results;
+
+    // Bulk insert for cells, ek roundtrip me kaam
+    const placeholders = [];
+    const values = [];
+    let paramCount = 1;
+
+    cellsArray.forEach((cell) => {
+      placeholders.push(
+        `($${paramCount++}, $${paramCount++}, $${paramCount++}, $${paramCount++}, $${paramCount++})`,
+      );
+      values.push(
+        productId,
+        cell.tier_id || null,
+        cell.name,
+        cell.count || 0,
+        cell.description ?? null,
+      );
+    });
+
+    const query = `
+      INSERT INTO product_cells (product_id, tier_id, name, count, description)
+      VALUES ${placeholders.join(", ")}
+      RETURNING id, product_id, tier_id, name, count, description, created_at
+    `;
+
+    const result = await pool.query(query, values);
+    return result.rows;
   }
 
   static async getCellsByProduct(productId) {
     const query = `
-      SELECT * FROM product_cells
+      SELECT id, product_id, tier_id, name, count, description, created_at
+      FROM product_cells
       WHERE product_id = $1
       ORDER BY name
     `;
@@ -151,7 +193,7 @@ class ProductComponent {
       UPDATE product_cells
       SET ${fields.join(", ")}
       WHERE id = $${paramCount}
-      RETURNING *
+      RETURNING id, product_id, tier_id, name, count, description, created_at
     `;
 
     const result = await pool.query(query, values);
@@ -170,13 +212,13 @@ class ProductComponent {
   }
 
   // Tiers ke Liye ...
-  
+
   static async createTier(productId, tierData) {
     const { name, count, description } = tierData;
     const query = `
       INSERT INTO product_tiers (product_id, name, count, description)
       VALUES ($1, $2, $3, $4)
-      RETURNING *
+      RETURNING id, product_id, name, count, description, created_at
     `;
     const values = [productId, name, count || 0, description];
     const result = await pool.query(query, values);
@@ -185,18 +227,38 @@ class ProductComponent {
 
   static async createTiers(productId, tiersArray) {
     if (!tiersArray || tiersArray.length === 0) return [];
-    
-    const results = [];
-    for (const tier of tiersArray) {
-      const result = await this.createTier(productId, tier);
-      results.push(result);
-    }
-    return results;
+
+    // Bulk insert tiers bhi, loop hata rahe hain
+    const placeholders = [];
+    const values = [];
+    let paramCount = 1;
+
+    tiersArray.forEach((tier) => {
+      placeholders.push(
+        `($${paramCount++}, $${paramCount++}, $${paramCount++}, $${paramCount++})`,
+      );
+      values.push(
+        productId,
+        tier.name,
+        tier.count || 0,
+        tier.description ?? null,
+      );
+    });
+
+    const query = `
+      INSERT INTO product_tiers (product_id, name, count, description)
+      VALUES ${placeholders.join(", ")}
+      RETURNING id, product_id, name, count, description, created_at
+    `;
+
+    const result = await pool.query(query, values);
+    return result.rows;
   }
 
   static async getTiersByProduct(productId) {
     const query = `
-      SELECT * FROM product_tiers
+      SELECT id, product_id, name, count, description, created_at
+      FROM product_tiers
       WHERE product_id = $1
       ORDER BY name
     `;
@@ -235,7 +297,7 @@ class ProductComponent {
       UPDATE product_tiers
       SET ${fields.join(", ")}
       WHERE id = $${paramCount}
-      RETURNING *
+      RETURNING id, product_id, name, count, description, created_at
     `;
 
     const result = await pool.query(query, values);
@@ -254,7 +316,7 @@ class ProductComponent {
   }
 
   // ========== COMBINED OPERATIONS ==========
-  
+
   static async getAllComponentsByProduct(productId) {
     const [fractiles, cells, tiers] = await Promise.all([
       this.getFractilesByProduct(productId),
