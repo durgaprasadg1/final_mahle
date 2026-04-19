@@ -75,10 +75,7 @@ export const useReports = () => {
   const buildAdvancedReportParams = () => {
     const params = {};
 
-    const needsHierarchy = ["fractile", "cells", "tiers"].includes(reportType);
-    if (needsHierarchy) {
-      params.include_hierarchy = true;
-    }
+    params.report_type = reportType;
 
     if (reportFilters.productId) {
       params.product_id = reportFilters.productId;
