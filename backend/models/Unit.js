@@ -4,7 +4,7 @@ class Unit {
   // Get all units
   static async findAll() {
     const query = `
-      SELECT u.*,
+      SELECT u.id, u.name, u.code, u.description, u.location, u.created_at, u.updated_at,
              COUNT(DISTINCT users.id) as user_count,
              COUNT(DISTINCT products.id) as product_count
       FROM units u
@@ -20,7 +20,7 @@ class Unit {
   // Find unit by ID
   static async findById(id) {
     const query = `
-      SELECT u.*,
+      SELECT u.id, u.name, u.code, u.description, u.location, u.created_at, u.updated_at,
              COUNT(DISTINCT users.id) as user_count,
              COUNT(DISTINCT products.id) as product_count
       FROM units u
@@ -35,7 +35,8 @@ class Unit {
 
   // Find unit by code
   static async findByCode(code) {
-    const query = "SELECT * FROM units WHERE code = $1";
+    const query =
+      "SELECT id, name, code, description, location, created_at, updated_at FROM units WHERE code = $1";
     const result = await pool.query(query, [code]);
     return result.rows[0];
   }
@@ -45,7 +46,7 @@ class Unit {
     const query = `
       INSERT INTO units (name, code, description, location)
       VALUES ($1, $2, $3, $4)
-      RETURNING *
+      RETURNING id, name, code, description, location, created_at, updated_at
     `;
     const values = [name, code, description, location];
     const result = await pool.query(query, values);
@@ -67,7 +68,7 @@ class Unit {
 
     if (fields.length === 0) {
       console.log("No fields to update");
-      return ;
+      return;
     }
 
     values.push(id);
@@ -75,7 +76,7 @@ class Unit {
       UPDATE units
       SET ${fields.join(", ")}
       WHERE id = $${paramCount}
-      RETURNING *
+      RETURNING id, name, code, description, location, created_at, updated_at
     `;
 
     const result = await pool.query(query, values);
@@ -83,7 +84,7 @@ class Unit {
   }
 
   static async delete(id) {
-    const query = "DELETE FROM units WHERE id = $1 RETURNING *";
+    const query = "DELETE FROM units WHERE id = $1 RETURNING id";
     const result = await pool.query(query, [id]);
     return result.rows[0];
   }

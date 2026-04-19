@@ -23,7 +23,7 @@ class Product {
     } = productData;
 
     const client = await pool.connect();
-    
+
     try {
       await client.query("BEGIN");
 
@@ -31,7 +31,7 @@ class Product {
       const productQuery = `
         INSERT INTO products (name, type, unit_id, description, specifications, created_by)
         VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING *
+        RETURNING id, name, type, unit_id, description, specifications, created_by, created_at, updated_at
       `;
 
       const productValues = [
@@ -53,17 +53,17 @@ class Product {
         const insertedTierResult = await client.query(
           `INSERT INTO product_tiers (product_id, name, count, description)
            VALUES ($1, $2, $3, $4)
-           RETURNING *`,
-          [product.id, tierName, 0, tierDescription]
+           RETURNING id, product_id, name, count, description, created_at`,
+          [product.id, tierName, 0, tierDescription],
         );
         const insertedTier = insertedTierResult.rows[0];
 
         // Cell  - Tier linking
-         const insertedCellResult = await client.query(
+        const insertedCellResult = await client.query(
           `INSERT INTO product_cells (product_id, tier_id, name, count, description)
            VALUES ($1, $2, $3, $4, $5)
-           RETURNING *`,
-          [product.id, insertedTier.id, cellName, 0, cellDescription]
+           RETURNING id, product_id, tier_id, name, count, description, created_at`,
+          [product.id, insertedTier.id, cellName, 0, cellDescription],
         );
         const insertedCell = insertedCellResult.rows[0];
 
@@ -71,38 +71,80 @@ class Product {
         await client.query(
           `INSERT INTO product_fractiles (product_id, cell_id, name, count, description)
            VALUES ($1, $2, $3, $4, $5)`,
-          [product.id, insertedCell.id, fractileName, 0, fractileDescription]
+          [product.id, insertedCell.id, fractileName, 0, fractileDescription],
         );
       } else {
-        // Backward-compatible component insertion (legacy array approach)
+        // Legacy array insert ko bulk me le gaye, loop avoid
         if (fractiles && fractiles.length > 0) {
-          for (const fractile of fractiles) {
-            await client.query(
-              `INSERT INTO product_fractiles (product_id, name, count, description)
-               VALUES ($1, $2, $3, $4)`,
-              [product.id, fractile.name, fractile.count || 0, fractile.description],
+          const placeholders = [];
+          const values = [];
+          let paramCount = 1;
+
+          fractiles.forEach((fractile) => {
+            placeholders.push(
+              `($${paramCount++}, $${paramCount++}, $${paramCount++}, $${paramCount++})`,
             );
-          }
+            values.push(
+              product.id,
+              fractile.name,
+              fractile.count || 0,
+              fractile.description ?? null,
+            );
+          });
+
+          await client.query(
+            `INSERT INTO product_fractiles (product_id, name, count, description)
+             VALUES ${placeholders.join(", ")}`,
+            values,
+          );
         }
 
         if (cells && cells.length > 0) {
-          for (const cell of cells) {
-            await client.query(
-              `INSERT INTO product_cells (product_id, name, count, description)
-               VALUES ($1, $2, $3, $4)`,
-              [product.id, cell.name, cell.count || 0, cell.description],
+          const placeholders = [];
+          const values = [];
+          let paramCount = 1;
+
+          cells.forEach((cell) => {
+            placeholders.push(
+              `($${paramCount++}, $${paramCount++}, $${paramCount++}, $${paramCount++})`,
             );
-          }
+            values.push(
+              product.id,
+              cell.name,
+              cell.count || 0,
+              cell.description ?? null,
+            );
+          });
+
+          await client.query(
+            `INSERT INTO product_cells (product_id, name, count, description)
+             VALUES ${placeholders.join(", ")}`,
+            values,
+          );
         }
 
         if (tiers && tiers.length > 0) {
-          for (const tier of tiers) {
-            await client.query(
-              `INSERT INTO product_tiers (product_id, name, count, description)
-               VALUES ($1, $2, $3, $4)`,
-              [product.id, tier.name, tier.count || 0, tier.description],
+          const placeholders = [];
+          const values = [];
+          let paramCount = 1;
+
+          tiers.forEach((tier) => {
+            placeholders.push(
+              `($${paramCount++}, $${paramCount++}, $${paramCount++}, $${paramCount++})`,
             );
-          }
+            values.push(
+              product.id,
+              tier.name,
+              tier.count || 0,
+              tier.description ?? null,
+            );
+          });
+
+          await client.query(
+            `INSERT INTO product_tiers (product_id, name, count, description)
+             VALUES ${placeholders.join(", ")}`,
+            values,
+          );
         }
       }
 
@@ -121,16 +163,24 @@ class Product {
   // Find product by ID with all components
   static async findById(id) {
     const query = `
-      SELECT p.*, 
+      SELECT p.id,
+             p.name,
+             p.type,
+             p.unit_id,
+             p.description,
+             p.specifications,
+             p.created_by,
+             p.created_at,
+             p.updated_at,
              units.name as unit_name, units.code as unit_code,
              users.name as created_by_name
       FROM products p
-      LEFT JOIN units ON p.unit_id = units.id
+      JOIN units ON p.unit_id = units.id
       LEFT JOIN users ON p.created_by = users.id
       WHERE p.id = $1
     `;
     const result = await pool.query(query, [id]);
-    
+
     if (!result.rows.length) {
       return null;
     }
@@ -138,7 +188,11 @@ class Product {
     const product = result.rows[0];
 
     // Attempt to parse specifications back to JSON if stored as stringified JSON
-    if (product && product.specifications && typeof product.specifications === "string") {
+    if (
+      product &&
+      product.specifications &&
+      typeof product.specifications === "string"
+    ) {
       try {
         product.specifications = JSON.parse(product.specifications);
       } catch (e) {
@@ -157,11 +211,19 @@ class Product {
   // Get all products with filters (without components for performance)
   static async findAll(filters = {}) {
     let query = `
-      SELECT p.*, 
+      SELECT p.id,
+             p.name,
+             p.type,
+             p.unit_id,
+             p.description,
+             p.specifications,
+             p.created_by,
+             p.created_at,
+             p.updated_at,
              units.name as unit_name, units.code as unit_code,
              users.name as created_by_name
       FROM products p
-      LEFT JOIN units ON p.unit_id = units.id
+      JOIN units ON p.unit_id = units.id
       LEFT JOIN users ON p.created_by = users.id
       WHERE 1=1
     `;
@@ -197,8 +259,8 @@ class Product {
         try {
           p.specifications = JSON.parse(p.specifications);
         } catch (e) {
-          // chhodd diye jaa jee le apni jindagi  
-     }
+          // chhodd diye jaa jee le apni jindagi
+        }
       }
     });
 
@@ -208,10 +270,12 @@ class Product {
   // Get all products with components (for detailed view)
   static async findAllWithComponents(filters = {}) {
     const products = await this.findAll(filters);
-    
+
     // Fetch components for each product
     for (const product of products) {
-      const components = await ProductComponent.getAllComponentsByProduct(product.id);
+      const components = await ProductComponent.getAllComponentsByProduct(
+        product.id,
+      );
       product.fractiles = components.fractiles;
       product.cells = components.cells;
       product.tiers = components.tiers;
@@ -223,7 +287,16 @@ class Product {
   // Get products by unit
   static async findByUnit(unitId) {
     const query = `
-      SELECT p.*, users.name as created_by_name
+      SELECT p.id,
+             p.name,
+             p.type,
+             p.unit_id,
+             p.description,
+             p.specifications,
+             p.created_by,
+             p.created_at,
+             p.updated_at,
+             users.name as created_by_name
       FROM products p
       LEFT JOIN users ON p.created_by = users.id
       WHERE p.unit_id = $1
@@ -235,15 +308,8 @@ class Product {
 
   // Update product
   static async update(id, updateData) {
-    const {
-      name,
-      type,
-      description,
-      specifications,
-      fractiles,
-      cells,
-      tiers,
-    } = updateData;
+    const { name, type, description, specifications, fractiles, cells, tiers } =
+      updateData;
 
     const client = await pool.connect();
 
@@ -275,7 +341,7 @@ class Product {
         values.push(
           typeof specifications === "object" && specifications !== null
             ? JSON.stringify(specifications)
-            : specifications
+            : specifications,
         );
         paramCount++;
       }
@@ -286,13 +352,17 @@ class Product {
           UPDATE products
           SET ${fields.join(", ")}
           WHERE id = $${paramCount}
-          RETURNING *
+          RETURNING id, name, type, unit_id, description, specifications, created_by, created_at, updated_at
         `;
         await client.query(query, values);
       }
 
       // Update components if provided
-      if (fractiles !== undefined || cells !== undefined || tiers !== undefined) {
+      if (
+        fractiles !== undefined ||
+        cells !== undefined ||
+        tiers !== undefined
+      ) {
         await ProductComponent.replaceAllComponents(id, {
           fractiles: fractiles || [],
           cells: cells || [],

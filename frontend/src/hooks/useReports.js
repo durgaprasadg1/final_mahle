@@ -2,7 +2,7 @@ import { useState } from "react";
 import { batchAPI } from "../lib/api";
 import { toast } from "react-toastify";
 import { formatDateOnly } from "../lib/utils";
-import {jsPDF} from "jspdf";
+import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 
 /**
@@ -75,6 +75,11 @@ export const useReports = () => {
   const buildAdvancedReportParams = () => {
     const params = {};
 
+    const needsHierarchy = ["fractile", "cells", "tiers"].includes(reportType);
+    if (needsHierarchy) {
+      params.include_hierarchy = true;
+    }
+
     if (reportFilters.productId) {
       params.product_id = reportFilters.productId;
     }
@@ -84,7 +89,9 @@ export const useReports = () => {
     }
 
     if (reportFilters.timeSlot) {
-      const [slot_start_time, slot_end_time] = String(reportFilters.timeSlot).split("|");
+      const [slot_start_time, slot_end_time] = String(
+        reportFilters.timeSlot,
+      ).split("|");
       if (slot_start_time) {
         params.slot_start_time = slot_start_time;
       }
@@ -280,7 +287,11 @@ export const useReports = () => {
       return `F: ${fractile} | C: ${cell} | T: ${tier}`;
     };
 
-    const doc = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+    const doc = new jsPDF({
+      orientation: "landscape",
+      unit: "pt",
+      format: "a4",
+    });
     const title = "Production Report";
     const period = buildReportPeriodLabel();
     const selectedWorkerName =
@@ -289,7 +300,9 @@ export const useReports = () => {
       (sum, batch) => sum + (Number(batch.quantity_produced) || 0),
       0,
     );
-    const uniqueProducts = new Set(reportResults.map((batch) => batch.product_id)).size;
+    const uniqueProducts = new Set(
+      reportResults.map((batch) => batch.product_id),
+    ).size;
 
     doc.setFontSize(16);
     doc.text(title, 40, 40);
@@ -304,17 +317,17 @@ export const useReports = () => {
     doc.text(`Unique Products: ${uniqueProducts}`, 360, 74);
 
     const tableRows = reportResults.map((batch) => [
-        formatDateOnly(batch.created_at),
-        batch.shift || "-",
-        batch.product_name || "-",
-        String(batch.quantity_produced ?? "-"),
-        batch.start_time || "-",
-        batch.end_time || "-",
-        batch.had_delay || "no",
-        batch.created_by_name || "-",
-        (batch.notes || "-").toString(),
-        buildHierarchyLabel(batch),
-      ]);
+      formatDateOnly(batch.created_at),
+      batch.shift || "-",
+      batch.product_name || "-",
+      String(batch.quantity_produced ?? "-"),
+      batch.start_time || "-",
+      batch.end_time || "-",
+      batch.had_delay || "no",
+      batch.created_by_name || "-",
+      (batch.notes || "-").toString(),
+      buildHierarchyLabel(batch),
+    ]);
 
     const tableHead = [
       "Date",

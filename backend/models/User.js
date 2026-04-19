@@ -3,7 +3,14 @@ import bcrypt from "bcryptjs";
 class User {
   static CRUD_OPERATIONS = ["create", "read", "update", "delete"];
 
-  static RESOURCE_KEYS = ["product", "fracticle", "tier", "cells", "batch", "planning"];
+  static RESOURCE_KEYS = [
+    "product",
+    "fracticle",
+    "tier",
+    "cells",
+    "batch",
+    "planning",
+  ];
 
   static RESOURCE_ALIASES = {
     product: "product",
@@ -81,18 +88,23 @@ class User {
   }
 
   static parsePermissionsObject(rawObject = {}) {
-    const compactMatrix = rawObject.m && typeof rawObject.m === "object" ? rawObject.m : {};
+    const compactMatrix =
+      rawObject.m && typeof rawObject.m === "object" ? rawObject.m : {};
     const expandedMatrix =
       rawObject.resources && typeof rawObject.resources === "object"
         ? rawObject.resources
         : rawObject.matrix && typeof rawObject.matrix === "object"
           ? rawObject.matrix
-          : rawObject.resource_permissions && typeof rawObject.resource_permissions === "object"
+          : rawObject.resource_permissions &&
+              typeof rawObject.resource_permissions === "object"
             ? rawObject.resource_permissions
             : {};
 
     const topLevelResources = this.RESOURCE_KEYS.reduce((acc, resourceKey) => {
-      if (rawObject[resourceKey] && typeof rawObject[resourceKey] === "object") {
+      if (
+        rawObject[resourceKey] &&
+        typeof rawObject[resourceKey] === "object"
+      ) {
         acc[resourceKey] = rawObject[resourceKey];
       }
       return acc;
@@ -117,7 +129,9 @@ class User {
     const aggregatedCrud = this.aggregateResources(resources);
     const effectiveCrud = hasExplicitFlat
       ? this.CRUD_OPERATIONS.reduce((acc, operation) => {
-          acc[operation] = Boolean(flatCrudFromInput[operation] || aggregatedCrud[operation]);
+          acc[operation] = Boolean(
+            flatCrudFromInput[operation] || aggregatedCrud[operation],
+          );
           return acc;
         }, {})
       : aggregatedCrud;
@@ -229,9 +243,11 @@ class User {
   }
 
   // Find user by email for authentication
-  static async findByEmail(email,password = null) {
+  static async findByEmail(email, password = null) {
     const query = `
-      SELECT u.*, units.name as unit_name, units.code as unit_code
+      SELECT u.id, u.email, u.password, u.name, u.role, u.status, u.unit_id,
+             u.permissions, u.created_by, u.created_at, u.updated_at, u.last_login,
+             units.name as unit_name, units.code as unit_code
       FROM users u
       LEFT JOIN units ON u.unit_id = units.id
       WHERE u.email = $1 AND u.status != 'blocked' 
@@ -244,7 +260,7 @@ class User {
     }
 
     const user = result.rows[0];
-    
+
     // Only verify password if provided
     if (password) {
       const isPasswordValid = await bcrypt.compare(password, user.password);
@@ -278,13 +294,15 @@ class User {
   // Find user by ID
   static async findById(id) {
     const query = `
-      SELECT u.*, units.name as unit_name, units.code as unit_code
+      SELECT u.id, u.email, u.name, u.role, u.status, u.unit_id,
+             u.permissions, u.created_by, u.created_at, u.updated_at, u.last_login,
+             units.name as unit_name, units.code as unit_code
       FROM users u
       LEFT JOIN units ON u.unit_id = units.id
       WHERE u.id = $1
     `;
     const result = await pool.query(query, [id]);
-    
+
     if (!result.rows.length) {
       return null;
     }
@@ -292,7 +310,7 @@ class User {
     const user = result.rows[0];
     // Convert permissions to object for API response
     user.permissions = this.permissionsToObject(user.permissions);
-    
+
     return user;
   }
 
@@ -333,7 +351,7 @@ class User {
     query += ` ORDER BY u.created_at DESC`;
 
     const result = await pool.query(query, values);
-    
+
     // Convert permissions to object for all users
     result.rows.forEach((user) => {
       user.permissions = this.permissionsToObject(user.permissions);
@@ -416,7 +434,7 @@ class User {
       ORDER BY name
     `;
     const result = await pool.query(query, [unitId]);
-    
+
     // Convert permissions to object for all users
     result.rows.forEach((user) => {
       user.permissions = this.permissionsToObject(user.permissions);
@@ -438,7 +456,9 @@ class User {
       if (!resourceKey) {
         return false;
       }
-      return Boolean(normalizedPermissions.resources?.[resourceKey]?.[permission]);
+      return Boolean(
+        normalizedPermissions.resources?.[resourceKey]?.[permission],
+      );
     }
 
     return Boolean(normalizedPermissions?.[permission]);
