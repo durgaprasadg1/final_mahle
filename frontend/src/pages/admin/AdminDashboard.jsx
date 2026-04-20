@@ -79,7 +79,7 @@ const RESOURCE_ROWS = [
 ];
 
 const getDefaultPermissionsMatrix = () => ({
-  product: { create: true, read: true, update: true, delete: false },
+  product: { create: true, read: false, update: false, delete: false },
   fracticl: { create: false, read: false, update: false, delete: false },
   tier: { create: false, read: false, update: false, delete: false },
   cells: { create: false, read: false, update: false, delete: false },
