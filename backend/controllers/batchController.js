@@ -276,6 +276,27 @@ class BatchController {
       }
 
       const reportType = req.query.report_type;
+      if (reportType) {
+        // Report filters strict rakh rahe hain, broad scan avoid
+        const needsFractile = ["fractile", "cells", "tiers"].includes(
+          reportType,
+        );
+        const needsTier = reportType === "tiers";
+
+        if (needsFractile && !filters.fractile_id) {
+          return res.status(400).json({
+            success: false,
+            message: "fractile_id is required for this report type",
+          });
+        }
+
+        if (needsTier && !filters.tier_id) {
+          return res.status(400).json({
+            success: false,
+            message: "tier_id is required for tiers report",
+          });
+        }
+      }
       let batches;
 
       // Report ke liye dedicated queries use kar rahe hain

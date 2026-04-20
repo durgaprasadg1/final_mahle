@@ -52,8 +52,8 @@ const RESOURCE_ROWS = [
     badgeClass: "bg-indigo-100 text-indigo-700 border-indigo-200",
   },
   {
-    key: "fracticl",
-    label: "Fracticl",
+    key: "fracticle",
+    label: "Fractile",
     badgeClass: "bg-amber-100 text-amber-700 border-amber-200",
   },
   {
@@ -80,7 +80,7 @@ const RESOURCE_ROWS = [
 
 const getDefaultPermissionsMatrix = () => ({
   product: { create: true, read: true, update: true, delete: false },
-  fracticl: { create: false, read: false, update: false, delete: false },
+  fracticle: { create: false, read: false, update: false, delete: false },
   tier: { create: false, read: false, update: false, delete: false },
   cells: { create: false, read: false, update: false, delete: false },
   batch: { create: false, read: false, update: false, delete: false },
@@ -177,7 +177,8 @@ const AdminDashboard = () => {
     };
 
     const resourcePermissions =
-      permissionsInput?.resources && typeof permissionsInput.resources === "object"
+      permissionsInput?.resources &&
+      typeof permissionsInput.resources === "object"
         ? permissionsInput.resources
         : {};
 
@@ -189,7 +190,7 @@ const AdminDashboard = () => {
         return resourcePermissions[resourceKey];
       }
 
-      if (resourceKey === "fracticl") {
+      if (resourceKey === "fracticle") {
         return (
           resourcePermissions.fracticle ||
           resourcePermissions.fractile ||
@@ -434,12 +435,16 @@ const AdminDashboard = () => {
       resetPlanForm();
       fetchProductionPlans();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to save production target");
+      toast.error(
+        error.response?.data?.message || "Failed to save production target",
+      );
     }
   };
 
   const handleDeletePlan = async (planId) => {
-    if (!window.confirm("Are you sure you want to delete this production target?")) {
+    if (
+      !window.confirm("Are you sure you want to delete this production target?")
+    ) {
       return;
     }
 
@@ -448,7 +453,9 @@ const AdminDashboard = () => {
       toast.success("Production target deleted successfully");
       fetchProductionPlans();
     } catch (error) {
-      toast.error(error.response?.data?.message || "Failed to delete production target");
+      toast.error(
+        error.response?.data?.message || "Failed to delete production target",
+      );
     }
   };
 
@@ -551,9 +558,7 @@ const AdminDashboard = () => {
         accessorKey: "unit_code",
         header: "Unit",
         cell: ({ row }) => (
-          <Badge variant="outline">
-            {row.original.unit_code || "N/A"}
-          </Badge>
+          <Badge variant="outline">{row.original.unit_code || "N/A"}</Badge>
         ),
       },
       {
@@ -563,7 +568,9 @@ const AdminDashboard = () => {
       {
         accessorKey: "shift",
         header: "Shift",
-        cell: ({ getValue }) => <span className="capitalize">{getValue()}</span>,
+        cell: ({ getValue }) => (
+          <span className="capitalize">{getValue()}</span>
+        ),
       },
       {
         accessorKey: "target_quantity",
@@ -580,7 +587,11 @@ const AdminDashboard = () => {
           const target = Number(row.original.target_quantity || 0);
           const produced = Number(row.original.produced_quantity || 0);
           const remaining = target - produced;
-          return <span className={remaining < 0 ? "text-red-600" : ""}>{remaining}</span>;
+          return (
+            <span className={remaining < 0 ? "text-red-600" : ""}>
+              {remaining}
+            </span>
+          );
         },
       },
       {
@@ -772,7 +783,9 @@ const AdminDashboard = () => {
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingUser ? "Update User" : "Create New User"}</DialogTitle>
+            <DialogTitle>
+              {editingUser ? "Update User" : "Create New User"}
+            </DialogTitle>
             <DialogDescription>
               {editingUser
                 ? "Update user details and permissions for this account"
@@ -855,9 +868,12 @@ const AdminDashboard = () => {
             <div className="space-y-3">
               <div className="flex items-start justify-between gap-3">
                 <div>
-                  <Label className="text-base font-semibold">Permissions Matrix</Label>
+                  <Label className="text-base font-semibold">
+                    Permissions Matrix
+                  </Label>
                   <p className="text-sm text-gray-500 mt-1">
-                    Choose what this user can do across each resource in their assigned unit.
+                    Choose what this user can do across each resource in their
+                    assigned unit.
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
@@ -901,7 +917,10 @@ const AdminDashboard = () => {
                   </thead>
                   <tbody>
                     {RESOURCE_ROWS.map((resource) => (
-                      <tr key={resource.key} className="border-t border-slate-200">
+                      <tr
+                        key={resource.key}
+                        className="border-t border-slate-200"
+                      >
                         <td className="px-4 py-3">
                           <Badge
                             variant="outline"
@@ -915,7 +934,9 @@ const AdminDashboard = () => {
                             <input
                               type="checkbox"
                               checked={Boolean(
-                                formData.permissions?.[resource.key]?.[operation.key],
+                                formData.permissions?.[resource.key]?.[
+                                  operation.key
+                                ],
                               )}
                               onChange={(e) =>
                                 updatePermissionCell(
@@ -994,7 +1015,10 @@ const AdminDashboard = () => {
                       if (!hasPermission) return null;
 
                       return (
-                        <Badge key={`${resource.key}-${operation.key}`} variant="outline">
+                        <Badge
+                          key={`${resource.key}-${operation.key}`}
+                          variant="outline"
+                        >
                           {resource.label}: {operation.key}
                         </Badge>
                       );
@@ -1033,7 +1057,9 @@ const AdminDashboard = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {editingPlan?.id ? "Edit Production Target" : "Add Production Target"}
+              {editingPlan?.id
+                ? "Edit Production Target"
+                : "Add Production Target"}
             </DialogTitle>
           </DialogHeader>
           <form onSubmit={handleSavePlan} className="space-y-4 mt-4">
@@ -1044,7 +1070,10 @@ const AdminDashboard = () => {
                   id="planUnit"
                   value={planForm.unit_id}
                   onChange={(e) =>
-                    setPlanForm((prev) => ({ ...prev, unit_id: e.target.value }))
+                    setPlanForm((prev) => ({
+                      ...prev,
+                      unit_id: e.target.value,
+                    }))
                   }
                   required
                   disabled={Boolean(editingPlan?.id)}
@@ -1064,15 +1093,20 @@ const AdminDashboard = () => {
                   id="planProduct"
                   value={planForm.product_id}
                   onChange={(e) =>
-                    setPlanForm((prev) => ({ ...prev, product_id: e.target.value }))
+                    setPlanForm((prev) => ({
+                      ...prev,
+                      product_id: e.target.value,
+                    }))
                   }
                   required
                   disabled={Boolean(editingPlan?.id)}
                 >
                   <option value="">Select Product</option>
                   {products
-                    .filter((product) =>
-                      !planForm.unit_id || String(product.unit_id) === String(planForm.unit_id),
+                    .filter(
+                      (product) =>
+                        !planForm.unit_id ||
+                        String(product.unit_id) === String(planForm.unit_id),
                     )
                     .map((product) => (
                       <option key={product.id} value={String(product.id)}>
@@ -1108,7 +1142,10 @@ const AdminDashboard = () => {
                   type="date"
                   value={planForm.plan_date}
                   onChange={(e) =>
-                    setPlanForm((prev) => ({ ...prev, plan_date: e.target.value }))
+                    setPlanForm((prev) => ({
+                      ...prev,
+                      plan_date: e.target.value,
+                    }))
                   }
                   required
                   disabled={Boolean(editingPlan?.id)}
@@ -1124,7 +1161,10 @@ const AdminDashboard = () => {
                 min="1"
                 value={planForm.target_quantity}
                 onChange={(e) =>
-                  setPlanForm((prev) => ({ ...prev, target_quantity: e.target.value }))
+                  setPlanForm((prev) => ({
+                    ...prev,
+                    target_quantity: e.target.value,
+                  }))
                 }
                 required
               />
