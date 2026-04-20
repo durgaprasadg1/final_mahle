@@ -34,7 +34,7 @@ const ShiftDashboard = ({ onBack }) => {
     startTime: "",
     endTime: "",
     timeInterval: "hourwise",
-    color: "#3b82f6",//yeh kuch kaam ka nhi hai
+    color: "#3b82f6", //yeh kuch kaam ka nhi hai
     isActive: true,
   });
 
@@ -47,10 +47,18 @@ const ShiftDashboard = ({ onBack }) => {
     try {
       setLoading(true);
 
-      // Local storage se shifts read karke state sync kar rahe hain
+      // Local storage se shifts read karke state sync kr rhe h
       const savedShifts = localStorage.getItem("shifts");
       if (savedShifts) {
-        setShifts(JSON.parse(savedShifts));
+        const parsed = JSON.parse(savedShifts);
+        const normalized = Array.isArray(parsed)
+          ? parsed.map((shift, index) => ({
+              ...shift,
+              id: shift?.id || `${Date.now()}-${index}`,
+            }))
+          : [];
+        setShifts(normalized);
+        localStorage.setItem("shifts", JSON.stringify(normalized));
       }
     } catch (error) {
       toast.error("Failed to fetch shifts");
@@ -88,7 +96,7 @@ const ShiftDashboard = ({ onBack }) => {
         ...formData,
         createdAt: editingShift?.createdAt || new Date().toISOString(),
       };
-          //Yeh block decide karta hai ki naya shift create karna hai ya existing shift update karna hai.
+      //Yeh block decide karta hai ki naya shift create karna hai ya existing shift update karna hai.
       let updatedShifts;
       if (editingShift) {
         updatedShifts = shifts.map((s) =>
@@ -219,8 +227,8 @@ const ShiftDashboard = ({ onBack }) => {
 
     return slots;
   };
-  
-    //useMemo React ka ek hook hai jo kisi value ko "memoize" karta hai—matlab, woh value tabhi dobara calculate hoti hai jab uske dependencies change hoti hain. Isse performance improve hoti hai, especially jab calculation heavy ho ya unnecessary re-renders avoid karne ho.
+
+  //useMemo React ka ek hook hai jo kisi value ko "memoize" karta hai—matlab, woh value tabhi dobara calculate hoti hai jab uske dependencies change hoti hain. Isse performance improve hoti hai, especially jab calculation heavy ho ya unnecessary re-renders avoid karne ho.
   const shiftColumns = useMemo(
     () => [
       // Table columns centralised hain taki DataTable clean rahe

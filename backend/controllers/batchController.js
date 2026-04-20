@@ -1,4 +1,5 @@
 import Batch from "../models/Batch.js";
+import BatchReport from "../models/BatchReport.js";
 import Product from "../models/Product.js";
 
 class BatchController {
@@ -274,7 +275,54 @@ class BatchController {
         filters.include_hierarchy = true;
       }
 
-      const batches = await Batch.findAll(filters);
+      const reportType = req.query.report_type;
+      if (reportType) {
+        // Report filters strict rakh rahe hain, broad scan avoid
+        const needsFractile = ["fractile", "cells", "tiers"].includes(
+          reportType,
+        );
+        const needsTier = reportType === "tiers";
+
+        if (needsFractile && !filters.fractile_id) {
+          return res.status(400).json({
+            success: false,
+            message: "fractile_id is required for this report type",
+          });
+        }
+
+        if (needsTier && !filters.tier_id) {
+          return res.status(400).json({
+            success: false,
+            message: "tier_id is required for tiers report",
+          });
+        }
+      }
+      let batches;
+
+      // Report ke liye dedicated queries use kar rahe hain
+      if (reportType) {
+        switch (reportType) {
+          case "createdby":
+            batches = await BatchReport.findCreatedByReport(filters);
+            break;
+          case "fractile":
+            batches = await BatchReport.findFractileReport(filters);
+            break;
+          case "cells":
+            batches = await BatchReport.findCellReport(filters);
+            break;
+          case "tiers":
+            batches = await BatchReport.findTierReport(filters);
+            break;
+          case "batchwise":
+          case "production":
+          default:
+            batches = await BatchReport.findProductionReport(filters);
+            break;
+        }
+      } else {
+        batches = await Batch.findAll(filters);
+      }
 
       res.json({
         success: true,

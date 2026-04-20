@@ -65,7 +65,11 @@ class User {
     return aggregate;
   }
 
-  static buildResources(resourceInput = {}, fallbackCrud = null) {
+  static buildResources(
+    resourceInput = {},
+    fallbackCrud = null,
+    { includeAll = true } = {},
+  ) {
     const resources = {};
     const normalizedResourceInput = {};
 
@@ -80,9 +84,14 @@ class User {
     this.RESOURCE_KEYS.forEach((resourceKey) => {
       const explicit =
         normalizedResourceInput[resourceKey] || resourceInput[resourceKey[0]];
-      resources[resourceKey] = explicit
-        ? this.buildCrudObject(explicit)
-        : this.buildCrudObject(fallbackCrud || {});
+      if (explicit) {
+        resources[resourceKey] = this.buildCrudObject(explicit);
+        return;
+      }
+
+      if (includeAll) {
+        resources[resourceKey] = this.buildCrudObject(fallbackCrud || {});
+      }
     });
     return resources;
   }
@@ -100,15 +109,17 @@ class User {
             ? rawObject.resource_permissions
             : {};
 
-    const topLevelResources = this.RESOURCE_KEYS.reduce((acc, resourceKey) => {
-      if (
-        rawObject[resourceKey] &&
-        typeof rawObject[resourceKey] === "object"
-      ) {
-        acc[resourceKey] = rawObject[resourceKey];
+    const topLevelResources = {};
+    Object.entries(rawObject || {}).forEach(([resourceKey, value]) => {
+      if (!value || typeof value !== "object") {
+        return;
       }
-      return acc;
-    }, {});
+      const normalizedKey = this.normalizeResourceKey(resourceKey);
+      if (!normalizedKey) {
+        return;
+      }
+      topLevelResources[normalizedKey] = value;
+    });
 
     const flatCrudFromInput = this.buildCrudObject(rawObject);
     const hasExplicitFlat = this.CRUD_OPERATIONS.some(
@@ -117,13 +128,20 @@ class User {
         Object.prototype.hasOwnProperty.call(rawObject, operation[0]),
     );
 
+    const mergedResources = {
+      ...compactMatrix,
+      ...expandedMatrix,
+      ...topLevelResources,
+    };
+    const hasExplicitResourceMatrix = Object.keys(mergedResources).length > 0;
     const resources = this.buildResources(
-      {
-        ...compactMatrix,
-        ...expandedMatrix,
-        ...topLevelResources,
-      },
+      mergedResources,
       hasExplicitFlat ? flatCrudFromInput : null,
+      {
+        // Keep sparse legacy resource payloads sparse so permission fallback can
+        // still use global CRUD flags (backward compatibility).
+        includeAll: hasExplicitFlat || !hasExplicitResourceMatrix,
+      },
     );
 
     const aggregatedCrud = this.aggregateResources(resources);
