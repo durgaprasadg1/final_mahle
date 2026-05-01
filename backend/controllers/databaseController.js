@@ -160,11 +160,11 @@ class DatabaseController {
           message: validationError,
         });
       }
-
+      // database kaa transaction shuru kiye hai yaha
       await client.query("BEGIN");
       await client.query(sql);
       await client.query("COMMIT");
-
+      // transaction khatam 
       res.json({
         success: true,
         message: "SQL data imported successfully",

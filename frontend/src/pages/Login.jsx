@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../contexts/AuthContext";
 import { Button } from "../components/ui/button";
@@ -18,8 +18,14 @@ const Login = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
+  const { login, isAuthenticated, user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!authLoading && isAuthenticated) {
+      navigate(user?.role === "admin" ? "/admin" : "/dashboard");
+    }
+  }, [authLoading, isAuthenticated, navigate, user]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

@@ -106,6 +106,30 @@ export const authenticate = async (req, res, next) => {
   }
 };
 
+export const preventAuthAccess = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) return next();
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+
+    if (!user) return next();
+
+    // If user is already authenticated, instruct client to redirect to role page
+    const redirectTo = user.role === "admin" ? "/admin" : "/dashboard";
+    return res.status(400).json({
+      success: false,
+      message: "Already authenticated",
+      redirect: redirectTo,
+    });
+  } catch (error) {
+    // token invalid or expired — allow to continue to login
+    return next();
+  }
+};
+
 export const authorizeAdmin = (req, res, next) => {
   if (req.user.role !== "admin") {
     return res.status(403).json({
@@ -168,7 +192,9 @@ export const checkPermission = (permission, resourceResolver = null) => {
       const fallbackFlag = resolvePermissionFlag(
         batchFallbackPermissions?.[permission],
       );
-      const productFlag = resolvePermissionFlag(productPermissions?.[permission]);
+      const productFlag = resolvePermissionFlag(
+        productPermissions?.[permission],
+      );
       const globalFlag = resolvePermissionFlag(userPermissions[permission]);
       const isAllowed =
         resourceFlag ??
