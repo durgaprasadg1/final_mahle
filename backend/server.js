@@ -13,13 +13,14 @@ import batchRoutes from "./routes/batchRoutes.js";
 import productionPlanRoutes from "./routes/productionPlanRoutes.js";
 import templateRoutes from "./routes/templateRoutes.js";
 import tierRoutes from "./routes/tierRoutes.js";
+import databaseRoutes from "./routes/databaseRoutes.js";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: "6mb" }));
+app.use(express.urlencoded({ extended: true, limit: "6mb" }));
 
 app.get("/api/health", (req, res) => {
   res.json({
@@ -37,6 +38,7 @@ app.use("/api/batches", batchRoutes);
 app.use("/api/production-plans", productionPlanRoutes);
 app.use("/api/templates", templateRoutes);
 app.use("/api/tiers", tierRoutes);
+app.use("/api/database", databaseRoutes);
 
 app.use(notFound);
 app.use(errorHandler);

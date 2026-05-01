@@ -136,4 +136,9 @@ export const productionPlanAPI = {
   delete: (id) => api.delete(`/production-plans/${id}`),
 };
 
+export const databaseAPI = {
+  exportSql: () => api.get("/database/export", { responseType: "blob" }),
+  importSql: (sql) => api.post("/database/import", { sql }),
+};
+
 export default api;

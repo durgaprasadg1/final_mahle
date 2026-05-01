@@ -1,6 +1,12 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { useAuth } from "../../contexts/AuthContext";
-import { userAPI, unitAPI, productAPI, productionPlanAPI } from "../../lib/api";
+import {
+  userAPI,
+  unitAPI,
+  productAPI,
+  productionPlanAPI,
+  databaseAPI,
+} from "../../lib/api";
 import ShiftDashboard from "./ShiftDashboard";
 import UnitsManagement from "./UnitsManagement";
 import { Button } from "../../components/ui/button";
@@ -34,6 +40,9 @@ import {
   Edit,
   Trash2,
   Eye,
+  Download,
+  Upload,
+  Database,
 } from "lucide-react";
 import { formatDate, formatDateOnly } from "../../lib/utils";
 import { DataTable } from "../../components/user/table";
@@ -102,6 +111,8 @@ const AdminDashboard = () => {
   const [currentView, setCurrentView] = useState("admin");
   const [editingPlan, setEditingPlan] = useState(null);
   const [editingUser, setEditingUser] = useState(null);
+  const [sqlImportFile, setSqlImportFile] = useState(null);
+  const [databaseBusy, setDatabaseBusy] = useState(false);
 
   const [planForm, setPlanForm] = useState({
     unit_id: "",
@@ -452,6 +463,71 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleExportSql = async () => {
+    try {
+      setDatabaseBusy(true);
+      const response = await databaseAPI.exportSql();
+      const blob = new Blob([response.data], {
+        type: "application/sql;charset=utf-8",
+      });
+      const downloadUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      const today = new Date().toISOString().slice(0, 10);
+
+      link.href = downloadUrl;
+      link.download = `mahle-data-export-${today}.sql`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(downloadUrl);
+      toast.success("SQL export downloaded");
+    } catch (error) {
+      toast.error(error.response?.data?.message || "Failed to export SQL data");
+    } finally {
+      setDatabaseBusy(false);
+    }
+  };
+
+  const handleImportSql = async () => {
+    if (!sqlImportFile) {
+      toast.error("Please choose a .sql file to import");
+      return;
+    }
+
+    if (!sqlImportFile.name.toLowerCase().endsWith(".sql")) {
+      toast.error("Only .sql files are allowed");
+      return;
+    }
+
+    if (
+      !window.confirm(
+        "Importing SQL will write data into the database. Continue?",
+      )
+    ) {
+      return;
+    }
+
+    try {
+      setDatabaseBusy(true);
+      const sql = await sqlImportFile.text();
+      await databaseAPI.importSql(sql);
+      toast.success("SQL data imported successfully");
+      setSqlImportFile(null);
+      fetchUsers();
+      fetchUnits();
+      fetchProducts();
+      fetchProductionPlans();
+    } catch (error) {
+      toast.error(
+        error.response?.data?.message ||
+          error.response?.data?.error ||
+          "Failed to import SQL data",
+      );
+    } finally {
+      setDatabaseBusy(false);
+    }
+  };
+
   const handleLogout = () => {
     logout();
     toast.info("Logged out successfully");
@@ -756,6 +832,59 @@ const AdminDashboard = () => {
             ) : (
               <DataTable columns={planColumns} data={productionPlans} />
             )}
+          </CardContent>
+        </Card>
+
+        <Card className="mt-8">
+          <CardHeader>
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Database className="w-5 h-5" />
+                  Database Import / Export
+                </CardTitle>
+                <CardDescription>
+                  Download a SQL data file or import records from an existing SQL file.
+                </CardDescription>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleExportSql}
+                disabled={databaseBusy}
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Export SQL
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
+              <div className="space-y-2">
+                <Label htmlFor="sqlImportFile">Import SQL File</Label>
+                <Input
+                  id="sqlImportFile"
+                  type="file"
+                  accept=".sql,application/sql,text/plain"
+                  onChange={(event) =>
+                    setSqlImportFile(event.target.files?.[0] || null)
+                  }
+                  disabled={databaseBusy}
+                />
+                <p className="text-sm text-gray-500">
+                  Supports data SQL queries such as INSERT, UPDATE, DELETE,
+                  TRUNCATE, and sequence reset statements.
+                </p>
+              </div>
+              <Button
+                type="button"
+                onClick={handleImportSql}
+                disabled={databaseBusy || !sqlImportFile}
+              >
+                <Upload className="w-4 h-4 mr-2" />
+                Import SQL
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </main>
