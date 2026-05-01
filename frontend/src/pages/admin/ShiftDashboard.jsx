@@ -43,6 +43,14 @@ const ShiftDashboard = ({ onBack }) => {
     fetchShifts();
   }, []);
 
+  const normalizeStoredShifts = (storedShifts) =>
+    storedShifts.map((shift, index) => ({
+      ...shift,
+      id: shift.id ?? `${Date.now()}-${index}`,
+      isActive: shift.isActive ?? true,
+      createdAt: shift.createdAt || new Date().toISOString(),
+    }));
+
   const fetchShifts = async () => {
     try {
       setLoading(true);
@@ -50,7 +58,13 @@ const ShiftDashboard = ({ onBack }) => {
       // Local storage se shifts read karke state sync kar rahe hain
       const savedShifts = localStorage.getItem("shifts");
       if (savedShifts) {
-        setShifts(JSON.parse(savedShifts));
+        const parsedShifts = JSON.parse(savedShifts);
+        const normalizedShifts = Array.isArray(parsedShifts)
+          ? normalizeStoredShifts(parsedShifts)
+          : [];
+
+        setShifts(normalizedShifts);
+        localStorage.setItem("shifts", JSON.stringify(normalizedShifts));
       }
     } catch (error) {
       toast.error("Failed to fetch shifts");
@@ -113,19 +127,30 @@ const ShiftDashboard = ({ onBack }) => {
   };
 
   const handleEditShift = (shift) => {
+    if (!shift?.id) {
+      toast.error("Cannot edit this shift because its ID is missing");
+      return;
+    }
     setEditingShift(shift);
     setFormData(shift);
     setShowCreateModal(true);
   };
 
   const handleDeleteShift = async (shiftId) => {
+    if (shiftId === undefined || shiftId === null || shiftId === "") {
+      toast.error("Cannot delete this shift because its ID is missing");
+      return;
+    }
+
     // Delete se pehle confirmation lena mandatory hai
     if (!window.confirm("Are you sure you want to delete this shift?")) return;
 
     try {
-      const updatedShifts = shifts.filter((s) => s.id !== shiftId);
-      setShifts(updatedShifts);
-      localStorage.setItem("shifts", JSON.stringify(updatedShifts));
+      setShifts((currentShifts) => {
+        const updatedShifts = currentShifts.filter((s) => s.id !== shiftId);
+        localStorage.setItem("shifts", JSON.stringify(updatedShifts));
+        return updatedShifts;
+      });
       toast.success("Shift deleted successfully");
     } catch (error) {
       toast.error("Failed to delete shift");
@@ -133,18 +158,25 @@ const ShiftDashboard = ({ onBack }) => {
   };
 
   const handleToggleStatus = (shiftId) => {
-    // Active/Inactive toggle karke turant persist kar dete hain
-    const updatedShifts = shifts.map((shift) => {
-      if (shift.id === shiftId) {
-        const newStatus = !shift.isActive;
-        toast.success(`Shift marked as ${newStatus ? "Active" : "Inactive"}`);
-        return { ...shift, isActive: newStatus };
-      }
-      return shift;
-    });
+    if (shiftId === undefined || shiftId === null || shiftId === "") {
+      toast.error("Cannot update this shift because its ID is missing");
+      return;
+    }
 
-    setShifts(updatedShifts);
-    localStorage.setItem("shifts", JSON.stringify(updatedShifts));
+    // Active/Inactive toggle karke turant persist kar dete hain
+    setShifts((currentShifts) => {
+      const updatedShifts = currentShifts.map((shift) => {
+        if (shift.id === shiftId) {
+          const newStatus = !shift.isActive;
+          toast.success(`Shift marked as ${newStatus ? "Active" : "Inactive"}`);
+          return { ...shift, isActive: newStatus };
+        }
+        return shift;
+      });
+
+      localStorage.setItem("shifts", JSON.stringify(updatedShifts));
+      return updatedShifts;
+    });
   };
 
   const resetForm = () => {
@@ -292,13 +324,17 @@ const ShiftDashboard = ({ onBack }) => {
           return (
             <div className="flex items-center space-x-2">
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => handleToggleStatus(shift.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleToggleStatus(shift.id);
+                }}
                 className={
                   shift.isActive
-                    ? "text-yellow-600 hover:text-yellow-700 hover:bg-yellow-50"
-                    : "text-green-600 hover:text-green-700 hover:bg-green-50"
+                    ? "text-green-600 hover:text-green-700 hover:bg-green-50"
+                    : "text-red-600 hover:text-red-700 hover:bg-red-50"
                 }
               >
                 <IoToggle
@@ -308,17 +344,25 @@ const ShiftDashboard = ({ onBack }) => {
                 />
               </Button>
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => handleEditShift(shift)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleEditShift(shift);
+                }}
                 className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
               >
                 <Edit className="w-4 h-4" />
               </Button>
               <Button
+                type="button"
                 variant="ghost"
                 size="sm"
-                onClick={() => handleDeleteShift(shift.id)}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  handleDeleteShift(shift.id);
+                }}
                 className="text-red-600 hover:text-red-700 hover:bg-red-50"
               >
                 <Trash2 className="w-4 h-4" />
