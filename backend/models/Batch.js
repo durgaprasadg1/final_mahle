@@ -70,7 +70,10 @@ class Batch {
       )
       VALUES ${placeholders.join(", ")}
       ON CONFLICT ON CONSTRAINT unique_product_shift_time DO NOTHING
-      RETURNING *
+      RETURNING 
+        id, product_id, unit_id, quantity_produced, shift, batch_in_shift,
+        batch_date, start_time, end_time, status, notes,
+        had_delay, delay_reason, created_by, created_at, updated_at
     `;
 
     const result = await pool.query(query, values);
@@ -110,7 +113,10 @@ class Batch {
         created_by
       )
       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-      RETURNING *
+      RETURNING 
+        id, product_id, unit_id, quantity_produced, shift, batch_in_shift,
+        batch_date, start_time, end_time, status, notes,
+        had_delay, delay_reason, created_by, created_at, updated_at
     `;
 
     const values = [
@@ -136,16 +142,31 @@ class Batch {
   static async findById(id) {
     const query = `
       SELECT 
-        b.*, 
+        b.id,
+        b.product_id,
+        b.unit_id,
+        b.quantity_produced,
+        b.shift,
+        b.batch_in_shift,
+        b.batch_date,
+        b.start_time,
+        b.end_time,
+        b.status,
+        b.notes,
+        b.had_delay,
+        b.delay_reason,
+        b.created_by,
+        b.created_at,
+        b.updated_at,
         p.name as product_name, 
         p.type as product_type,
-        units.name as unit_name, 
-        units.code as unit_code,
-        users.name as created_by_name
+        u.name as unit_name, 
+        u.code as unit_code,
+        creator.name as created_by_name
       FROM batches b
-      LEFT JOIN products p ON b.product_id = p.id
-      LEFT JOIN units ON b.unit_id = units.id
-      LEFT JOIN users ON b.created_by = users.id
+      JOIN products p ON b.product_id = p.id
+      JOIN units u ON b.unit_id = u.id
+      LEFT JOIN users creator ON b.created_by = creator.id
       WHERE b.id = $1
     `;
     const result = await pool.query(query, [id]);
@@ -153,14 +174,34 @@ class Batch {
   }
 
   static async findAll(filters = {}) {
+    const includeHierarchy = Boolean(filters.include_hierarchy);
+    // Report me hi hierarchy chahiye, warna heavy subquery skip karte hain
     let query = `
       SELECT 
-        b.*, 
+        b.id,
+        b.product_id,
+        b.unit_id,
+        b.quantity_produced,
+        b.shift,
+        b.batch_in_shift,
+        b.batch_date,
+        b.start_time,
+        b.end_time,
+        b.status,
+        b.notes,
+        b.had_delay,
+        b.delay_reason,
+        b.created_by,
+        b.created_at,
+        b.updated_at,
         p.name as product_name, 
         p.type as product_type,
-        units.name as unit_name, 
-        units.code as unit_code,
-        users.name as created_by_name,
+        u.name as unit_name, 
+        u.code as unit_code,
+        creator.name as created_by_name
+        ${
+          includeHierarchy
+            ? `,
         (
           SELECT STRING_AGG(DISTINCT pf.name, ', ' ORDER BY pf.name)
           FROM product_fractiles pf
@@ -175,11 +216,13 @@ class Batch {
           SELECT STRING_AGG(DISTINCT pt.name, ', ' ORDER BY pt.name)
           FROM product_tiers pt
           WHERE pt.product_id = b.product_id
-        ) as tier_names
+        ) as tier_names`
+            : ""
+        }
       FROM batches b
-      LEFT JOIN products p ON b.product_id = p.id
-      LEFT JOIN units ON b.unit_id = units.id
-      LEFT JOIN users ON b.created_by = users.id
+      JOIN products p ON b.product_id = p.id
+      JOIN units u ON b.unit_id = u.id
+      LEFT JOIN users creator ON b.created_by = creator.id
       WHERE 1=1  
     `;
     // need to dynamically add filters to the query kyuki hmne wha 1=1 which is always true, to make it easier to append AND conditions without worrying about whether it's the first condition or not. Then we check for each possible filter and if it's present, we append the appropriate condition to the query and add the value to the values array. Finally, we execute the query with the accumulated values.
@@ -223,7 +266,7 @@ class Batch {
     }
 
     if (filters.created_by_name) {
-      query += ` AND users.name ILIKE $${paramCount}`;
+      query += ` AND creator.name ILIKE $${paramCount}`;
       values.push(`%${filters.created_by_name}%`);
       paramCount++;
     }
@@ -318,13 +361,28 @@ class Batch {
   static async findByUnit(unitId, limit = 50) {
     const query = `
       SELECT 
-        b.*, 
+        b.id,
+        b.product_id,
+        b.unit_id,
+        b.quantity_produced,
+        b.shift,
+        b.batch_in_shift,
+        b.batch_date,
+        b.start_time,
+        b.end_time,
+        b.status,
+        b.notes,
+        b.had_delay,
+        b.delay_reason,
+        b.created_by,
+        b.created_at,
+        b.updated_at,
         p.name as product_name, 
         p.type as product_type,
-        users.name as created_by_name
+        creator.name as created_by_name
       FROM batches b
-      LEFT JOIN products p ON b.product_id = p.id
-      LEFT JOIN users ON b.created_by = users.id
+      JOIN products p ON b.product_id = p.id
+      LEFT JOIN users creator ON b.created_by = creator.id
       WHERE b.unit_id = $1
       ORDER BY b.created_at DESC, b.shift, b.batch_in_shift
       LIMIT $2
@@ -336,13 +394,28 @@ class Batch {
   static async findByShift(unitId, shift, date = null) {
     let query = `
       SELECT 
-        b.*, 
+        b.id,
+        b.product_id,
+        b.unit_id,
+        b.quantity_produced,
+        b.shift,
+        b.batch_in_shift,
+        b.batch_date,
+        b.start_time,
+        b.end_time,
+        b.status,
+        b.notes,
+        b.had_delay,
+        b.delay_reason,
+        b.created_by,
+        b.created_at,
+        b.updated_at,
         p.name as product_name, 
         p.type as product_type,
-        users.name as created_by_name
+        creator.name as created_by_name
       FROM batches b
-      LEFT JOIN products p ON b.product_id = p.id
-      LEFT JOIN users ON b.created_by = users.id
+      JOIN products p ON b.product_id = p.id
+      LEFT JOIN users creator ON b.created_by = creator.id
       WHERE b.unit_id = $1 AND b.shift = $2
     `;
 
@@ -383,7 +456,10 @@ class Batch {
       UPDATE batches
       SET ${fields.join(", ")}
       WHERE id = $${paramCount}
-      RETURNING *
+      RETURNING 
+        id, product_id, unit_id, quantity_produced, shift, batch_in_shift,
+        batch_date, start_time, end_time, status, notes,
+        had_delay, delay_reason, created_by, created_at, updated_at
     `;
 
     const result = await pool.query(query, values);

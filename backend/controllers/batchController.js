@@ -1,61 +1,68 @@
 import Batch from "../models/Batch.js";
+import BatchReport from "../models/BatchReport.js";
 import Product from "../models/Product.js";
 
 class BatchController {
   static async createBatchesBulk(req, res) {
     try {
       const { batches } = req.body;
-  
+
       if (!batches || !Array.isArray(batches) || batches.length === 0) {
         return res.status(400).json({
           success: false,
           message: "Batches array is required and cannot be empty",
         });
       }
-  
+
       // Validate all batches
       const errors = [];
       const validBatches = [];
-  
+
       for (let i = 0; i < batches.length; i++) {
         const batch = batches[i];
-        
-        if (!batch.product_id || !batch.quantity_produced || !batch.shift || 
-            !batch.start_time || !batch.end_time) {
+
+        if (
+          !batch.product_id ||
+          !batch.quantity_produced ||
+          !batch.shift ||
+          !batch.start_time ||
+          !batch.end_time
+        ) {
           errors.push(`Batch ${i + 1}: Missing required fields`);
           continue;
         }
-  
+
         const validShifts = ["morning", "afternoon", "night"];
         if (!validShifts.includes(batch.shift)) {
           errors.push(`Batch ${i + 1}: Invalid shift`);
           continue;
         }
-  
+
         // Verify product exists
         const product = await Product.findById(batch.product_id);
         if (!product) {
           errors.push(`Batch ${i + 1}: Product not found`);
           continue;
         }
-  
+
         // Check access
         if (req.user.role !== "admin" && product.unit_id !== req.user.unit_id) {
           errors.push(`Batch ${i + 1}: Access denied`);
           continue;
         }
-  
-        const queryDate = batch.batch_date || new Date().toISOString().split("T")[0];
-        
+
+        const queryDate =
+          batch.batch_date || new Date().toISOString().split("T")[0];
+
         let finalBatchInShift = batch.batch_in_shift;
         if (!finalBatchInShift) {
           finalBatchInShift = await Batch.getNextBatchInShift(
             batch.product_id,
             batch.shift,
-            queryDate
+            queryDate,
           );
         }
-  
+
         validBatches.push({
           product_id: batch.product_id,
           unit_id: product.unit_id,
@@ -72,7 +79,7 @@ class BatchController {
           created_by: req.user.id,
         });
       }
-  
+
       if (validBatches.length === 0) {
         return res.status(400).json({
           success: false,
@@ -80,10 +87,10 @@ class BatchController {
           errors,
         });
       }
-  
+
       // Create all batches in one query
       const createdBatches = await Batch.createBulk(validBatches);
-  
+
       res.status(201).json({
         success: true,
         message: `${createdBatches.length} batch(es) created successfully`,
@@ -264,8 +271,58 @@ class BatchController {
       if (fractile_id) filters.fractile_id = parseInt(fractile_id);
       if (cell_id) filters.cell_id = parseInt(cell_id);
       if (tier_id) filters.tier_id = parseInt(tier_id);
+      if (req.query.include_hierarchy === "true") {
+        filters.include_hierarchy = true;
+      }
 
-      const batches = await Batch.findAll(filters);
+      const reportType = req.query.report_type;
+      if (reportType) {
+        // Report filters strict rakh rahe hain, broad scan avoid
+        const needsFractile = ["fractile", "cells", "tiers"].includes(
+          reportType,
+        );
+        const needsTier = reportType === "tiers";
+
+        if (needsFractile && !filters.fractile_id) {
+          return res.status(400).json({
+            success: false,
+            message: "fractile_id is required for this report type",
+          });
+        }
+
+        if (needsTier && !filters.tier_id) {
+          return res.status(400).json({
+            success: false,
+            message: "tier_id is required for tiers report",
+          });
+        }
+      }
+      let batches;
+
+      // Report ke liye dedicated queries use kar rahe hain
+      if (reportType) {
+        switch (reportType) {
+          case "createdby":
+            batches = await BatchReport.findCreatedByReport(filters);
+            break;
+          case "fractile":
+            batches = await BatchReport.findFractileReport(filters);
+            break;
+          case "cells":
+            batches = await BatchReport.findCellReport(filters);
+            break;
+          case "tiers":
+            batches = await BatchReport.findTierReport(filters);
+            break;
+          case "batchwise":
+          case "production":
+          default:
+            batches = await BatchReport.findProductionReport(filters);
+            break;
+        }
+      } else {
+        batches = await Batch.findAll(filters);
+      }
 
       res.json({
         success: true,

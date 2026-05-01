@@ -4,7 +4,14 @@ import { toast } from "react-toastify";
 
 const AuthContext = createContext(null);
 
-const RESOURCE_KEYS = ["product", "fracticl", "tier", "cells", "batch", "planning"];
+const RESOURCE_KEYS = [
+  "product",
+  "fracticle",
+  "tier",
+  "cells",
+  "batch",
+  "planning",
+];
 
 const normalizeCrud = (input = {}) => ({
   create: Boolean(input.create ?? input.c),
@@ -15,7 +22,12 @@ const normalizeCrud = (input = {}) => ({
 
 const normalizePermissions = (permissionsInput) => {
   if (!permissionsInput) {
-    const flatDefault = { create: false, read: true, update: false, delete: false };
+    const flatDefault = {
+      create: false,
+      read: true,
+      update: false,
+      delete: false,
+    };
     return {
       ...flatDefault,
       resources: RESOURCE_KEYS.reduce((acc, key) => {
@@ -42,8 +54,20 @@ const normalizePermissions = (permissionsInput) => {
 
   const flat = normalizeCrud(parsedInput);
   const matrixSource = parsedInput.resources || parsedInput.m || {};
+  const resolveResourceRow = (resource) => {
+    if (resource === "fracticle") {
+      return (
+        matrixSource.fracticle ||
+        matrixSource.fractile ||
+        matrixSource.fracticl ||
+        matrixSource[resource[0]]
+      );
+    }
+    return matrixSource[resource] || matrixSource[resource[0]];
+  };
+
   const resources = RESOURCE_KEYS.reduce((acc, resource) => {
-    const row = matrixSource[resource] || matrixSource[resource[0]];
+    const row = resolveResourceRow(resource);
     acc[resource] = row ? normalizeCrud(row) : { ...flat };
     return acc;
   }, {});
@@ -71,8 +95,8 @@ const normalizePermissions = (permissionsInput) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
-   console.log("useAuth must be used within an AuthProvider");
-   toast.error("Something went wrong");
+    console.log("useAuth must be used within an AuthProvider");
+    toast.error("Something went wrong");
   }
   return context;
 };
@@ -153,8 +177,5 @@ export const AuthProvider = ({ children }) => {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };
-
-
-
 
 //Yeh file pura app mein authentication ka single source of truth hai, taki har component ko alag se login state na dekhni pade—bas context se le le.

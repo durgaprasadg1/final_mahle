@@ -60,11 +60,21 @@ class UserController {
         permissionsData = {
           resources: {
             product: { create: true, read: true, update: true, delete: false },
-            fracticl: { create: false, read: false, update: false, delete: false },
+            fracticle: {
+              create: false,
+              read: false,
+              update: false,
+              delete: false,
+            },
             tier: { create: false, read: false, update: false, delete: false },
             cells: { create: false, read: false, update: false, delete: false },
             batch: { create: false, read: false, update: false, delete: false },
-            planning: { create: false, read: false, update: false, delete: false },
+            planning: {
+              create: false,
+              read: false,
+              update: false,
+              delete: false,
+            },
           },
         };
       }
