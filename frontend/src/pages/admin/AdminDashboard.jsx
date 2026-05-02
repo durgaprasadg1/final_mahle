@@ -710,20 +710,26 @@ const AdminDashboard = () => {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentView("units")}
+              <a
+                href="#units"
+                className="text-sm font-medium text-blue-400 transition-colors hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                onClick={(event) => {
+                  event.preventDefault();
+                  setCurrentView("units");
+                }}
               >
                 Manage Units
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setCurrentView("shift")}
+              </a>
+              <a
+                href="#shift"
+                className="text-sm font-medium text-blue-400 transition-colors hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                onClick={(event) => {
+                  event.preventDefault();
+                  setCurrentView("shift");
+                }}
               >
                 ShiftMaker
-              </Button>
+              </a>
               <div className="text-right">
                 <p className="text-sm font-medium text-gray-900">
                   {user?.name}
@@ -731,10 +737,17 @@ const AdminDashboard = () => {
                 <p className="text-xs text-gray-500">{user?.email}</p>
               </div>
 
-              <Button variant="outline" size="sm" onClick={handleLogout}>
+              <a
+                href="#logout"
+                className="text-sm font-medium text-red-600 transition-colors hover:text-gray-900 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                onClick={(event) => {
+                  event.preventDefault();
+                  handleLogout();
+                }}
+              >
                 <LogOut className="w-4 h-4 mr-2" />
                 Logout
-              </Button>
+              </a>
             </div>
           </div>
         </div>
