@@ -7,7 +7,7 @@ const router = express.Router();
 const getTemplateResource = (req) => {
   const type = String(req.params.type || "").toLowerCase();
 
-  if (type.startsWith("fract")) return "fracticl";
+  if (type.startsWith("fract")) return "fracticle";
   if (type.startsWith("tier")) return "tier";
   if (type.startsWith("cell")) return "cells";
 

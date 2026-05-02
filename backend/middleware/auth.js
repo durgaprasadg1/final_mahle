@@ -28,6 +28,46 @@ const normalizeResource = (resource) => {
   return RESOURCE_ALIASES[key] || null;
 };
 
+const resolveResourcePermissions = (resources = {}, resourceKey = null) => {
+  if (!resourceKey || !resources || typeof resources !== "object") {
+    return undefined;
+  }
+
+  if (resources[resourceKey] && typeof resources[resourceKey] === "object") {
+    return resources[resourceKey];
+  }
+
+  for (const [key, value] of Object.entries(resources)) {
+    if (normalizeResource(key) === resourceKey && typeof value === "object") {
+      return value;
+    }
+  }
+
+  return undefined;
+};
+
+const resolvePermissionFlag = (value) => {
+  if (typeof value === "boolean") {
+    return value;
+  }
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    if (normalized === "true") return true;
+    if (normalized === "false") return false;
+  }
+
+  if (value === 1 || value === "1") {
+    return true;
+  }
+
+  if (value === 0 || value === "0") {
+    return false;
+  }
+
+  return undefined;
+};
+
 export const authenticate = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -66,6 +106,30 @@ export const authenticate = async (req, res, next) => {
   }
 };
 
+export const preventAuthAccess = async (req, res, next) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+
+    if (!token) return next();
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const user = await User.findById(decoded.id);
+
+    if (!user) return next();
+
+    // If user is already authenticated, instruct client to redirect to role page
+    const redirectTo = user.role === "admin" ? "/admin" : "/dashboard";
+    return res.status(400).json({
+      success: false,
+      message: "Already authenticated",
+      redirect: redirectTo,
+    });
+  } catch (error) {
+    // token invalid or expired — allow to continue to login
+    return next();
+  }
+};
+
 export const authorizeAdmin = (req, res, next) => {
   if (req.user.role !== "admin") {
     return res.status(403).json({
@@ -100,23 +164,45 @@ export const checkPermission = (permission, resourceResolver = null) => {
     );
 
     if (resolvedResource) {
-      const resourcePermissions = userPermissions.resources?.[resolvedResource];
+      const resourcePermissions = resolveResourcePermissions(
+        userPermissions.resources,
+        resolvedResource,
+      );
+      const productPermissions =
+        resolvedResource === "fracticle" ||
+        resolvedResource === "cells" ||
+        resolvedResource === "tier"
+          ? resolveResourcePermissions(userPermissions.resources, "product")
+          : undefined;
       const legacyBatchPermissions =
         resolvedResource === "batch"
           ? userPermissions.resources?.cells
           : undefined;
       const batchFallbackPermissions =
         resolvedResource === "planning"
-          ? userPermissions.resources?.batch ?? userPermissions.resources?.cells
+          ? (userPermissions.resources?.batch ??
+            userPermissions.resources?.cells)
           : undefined;
+      const resourceFlag = resolvePermissionFlag(
+        resourcePermissions?.[permission],
+      );
+      const legacyFlag = resolvePermissionFlag(
+        legacyBatchPermissions?.[permission],
+      );
+      const fallbackFlag = resolvePermissionFlag(
+        batchFallbackPermissions?.[permission],
+      );
+      const productFlag = resolvePermissionFlag(
+        productPermissions?.[permission],
+      );
+      const globalFlag = resolvePermissionFlag(userPermissions[permission]);
       const isAllowed =
-        typeof resourcePermissions?.[permission] === "boolean"
-          ? resourcePermissions[permission]
-          : typeof legacyBatchPermissions?.[permission] === "boolean"
-            ? legacyBatchPermissions[permission]
-            : typeof batchFallbackPermissions?.[permission] === "boolean"
-              ? batchFallbackPermissions[permission]
-          : userPermissions[permission];
+        resourceFlag ??
+        legacyFlag ??
+        fallbackFlag ??
+        productFlag ??
+        globalFlag ??
+        false;
 
       if (!isAllowed) {
         return res.status(403).json({

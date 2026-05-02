@@ -62,7 +62,9 @@ class ProductionPlan {
       WHERE slot_key IS NULL OR slot_key = ''
     `);
 
-    await pool.query("ALTER TABLE production_plans DROP CONSTRAINT IF EXISTS unique_production_plan");
+    await pool.query(
+      "ALTER TABLE production_plans DROP CONSTRAINT IF EXISTS unique_production_plan",
+    );
     await pool.query(`
       DO $$
       BEGIN
@@ -124,7 +126,8 @@ class ProductionPlan {
         notes = EXCLUDED.notes,
         updated_by = EXCLUDED.updated_by,
         updated_at = CURRENT_TIMESTAMP
-      RETURNING *
+      RETURNING id, unit_id, product_id, shift, plan_date, slot_start_time, slot_end_time,
+                slot_key, target_quantity, notes, created_by, updated_by, created_at, updated_at
     `;
 
     const values = [
@@ -150,7 +153,20 @@ class ProductionPlan {
 
     let query = `
       SELECT
-        pp.*,
+        pp.id,
+        pp.unit_id,
+        pp.product_id,
+        pp.shift,
+        pp.plan_date,
+        pp.slot_start_time,
+        pp.slot_end_time,
+        pp.slot_key,
+        pp.target_quantity,
+        pp.notes,
+        pp.created_by,
+        pp.updated_by,
+        pp.created_at,
+        pp.updated_at,
         p.name as product_name,
         p.type as product_type,
         u.name as unit_name,
@@ -241,7 +257,10 @@ class ProductionPlan {
     await this.ensureTableExists();
 
     const query = `
-      SELECT pp.*, p.name as product_name, p.type as product_type
+      SELECT pp.id, pp.unit_id, pp.product_id, pp.shift, pp.plan_date, pp.slot_start_time,
+             pp.slot_end_time, pp.slot_key, pp.target_quantity, pp.notes, pp.created_by,
+             pp.updated_by, pp.created_at, pp.updated_at,
+             p.name as product_name, p.type as product_type
       FROM production_plans pp
       JOIN products p ON pp.product_id = p.id
       WHERE pp.id = $1
@@ -343,7 +362,8 @@ class ProductionPlan {
       UPDATE production_plans
       SET ${fields.join(", ")}
       WHERE id = $${paramCount}
-      RETURNING *
+      RETURNING id, unit_id, product_id, shift, plan_date, slot_start_time, slot_end_time,
+                slot_key, target_quantity, notes, created_by, updated_by, created_at, updated_at
     `;
 
     const result = await pool.query(query, values);
