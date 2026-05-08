@@ -855,7 +855,8 @@ const AdminDashboard = () => {
                   Database Import / Export
                 </CardTitle>
                 <CardDescription>
-                  Download a SQL data file or import records from an existing SQL file.
+                  Download a SQL data file or import records from an existing
+                  SQL file.
                 </CardDescription>
               </div>
               <Button
