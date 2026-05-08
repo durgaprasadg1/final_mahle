@@ -40,9 +40,12 @@ export const ReportsModal = ({
   onDownloadExcel,
   onDownloadPDF,
 }) => {
-  const isPeriodBasedDuration = ["daily", "weekly", "monthly", "yearly"].includes(
-    reportDuration,
-  );
+  const isPeriodBasedDuration = [
+    "daily",
+    "weekly",
+    "monthly",
+    "yearly",
+  ].includes(reportDuration);
   const shouldUseDateRange = reportDuration === "custom";
 
   const handleClose = () => {
@@ -88,8 +91,8 @@ export const ReportsModal = ({
       .map((batch) => batch?.created_by_name?.trim())
       .filter(Boolean);
 
-    return [...new Set([...namesFromBatches, ...namesFromReports])].sort((a, b) =>
-      a.localeCompare(b),
+    return [...new Set([...namesFromBatches, ...namesFromReports])].sort(
+      (a, b) => a.localeCompare(b),
     );
   }, [batches, reportResults]);
 
@@ -110,7 +113,9 @@ export const ReportsModal = ({
         .filter((shift) => shift?.isActive !== false)
         .map((shift) => {
           const value = resolveShiftType(shift);
-          const fallbackLabel = value ? value.charAt(0).toUpperCase() + value.slice(1) : "";
+          const fallbackLabel = value
+            ? value.charAt(0).toUpperCase() + value.slice(1)
+            : "";
 
           return {
             value,
@@ -148,7 +153,9 @@ export const ReportsModal = ({
     });
 
     [...(batches || []), ...(reportResults || [])].forEach((batch) => {
-      const value = String(batch?.shift || "").trim().toLowerCase();
+      const value = String(batch?.shift || "")
+        .trim()
+        .toLowerCase();
       if (!value || optionsByValue.has(value)) return;
 
       optionsByValue.set(value, {
@@ -180,7 +187,12 @@ export const ReportsModal = ({
     const grouped = new Map();
 
     configuredShifts.forEach((shiftConfig) => {
-      if (!shiftConfig?.value || !shiftConfig?.startTime || !shiftConfig?.endTime) return;
+      if (
+        !shiftConfig?.value ||
+        !shiftConfig?.startTime ||
+        !shiftConfig?.endTime
+      )
+        return;
 
       const generatedSlots = generateTimeSlots(
         shiftConfig.startTime,
@@ -201,7 +213,9 @@ export const ReportsModal = ({
     });
 
     [...(batches || []), ...(reportResults || [])].forEach((batch) => {
-      const shift = String(batch?.shift || "").trim().toLowerCase();
+      const shift = String(batch?.shift || "")
+        .trim()
+        .toLowerCase();
       const start = formatTimeLabel(batch?.start_time);
       const end = formatTimeLabel(batch?.end_time);
       if (!shift || !start || !end) return;
@@ -238,9 +252,9 @@ export const ReportsModal = ({
     }
 
     if (reportFilters.shift && reportFilters.timeSlot) {
-      const isValidTimeSlotForShift = (shiftTimeSlotOptions[reportFilters.shift] || []).some(
-        (slot) => slot.value === reportFilters.timeSlot,
-      );
+      const isValidTimeSlotForShift = (
+        shiftTimeSlotOptions[reportFilters.shift] || []
+      ).some((slot) => slot.value === reportFilters.timeSlot);
 
       if (!isValidTimeSlotForShift) {
         toast.warning("Selected time slot is not valid for the selected shift");
@@ -351,11 +365,26 @@ export const ReportsModal = ({
               ) : (
                 <div className="space-y-2">
                   <Label>
-                    Select {reportDuration === "monthly" || reportDuration === "yearly" ? (reportDuration === "monthly" ? "Month" : "Year") : "Date"}
+                    Select{" "}
+                    {reportDuration === "monthly" || reportDuration === "yearly"
+                      ? reportDuration === "monthly"
+                        ? "Month"
+                        : "Year"
+                      : "Date"}
                   </Label>
                   <Input
-                    type={reportDuration === "yearly" ? "number" : reportDuration === "monthly" ? "month" : "date"}
-                    value={reportDuration === "yearly" ? reportDate.split("-")[0] : reportDate}
+                    type={
+                      reportDuration === "yearly"
+                        ? "number"
+                        : reportDuration === "monthly"
+                          ? "month"
+                          : "date"
+                    }
+                    value={
+                      reportDuration === "yearly"
+                        ? reportDate.split("-")[0]
+                        : reportDate
+                    }
                     onChange={(e) => {
                       if (reportDuration === "yearly") {
                         setReportDate(`${e.target.value}-01-01`);
@@ -363,7 +392,10 @@ export const ReportsModal = ({
                         setReportDate(e.target.value);
                       }
                     }}
-                    {...(reportDuration === "yearly" && { min: "2000", max: "2100" })}
+                    {...(reportDuration === "yearly" && {
+                      min: "2000",
+                      max: "2100",
+                    })}
                   />
                 </div>
               )}
@@ -375,7 +407,9 @@ export const ReportsModal = ({
                   <Label>Fractile</Label>
                   <Select
                     value={reportFilters.fractileId}
-                    onChange={(e) => handleFilterChange("fractileId", e.target.value)}
+                    onChange={(e) =>
+                      handleFilterChange("fractileId", e.target.value)
+                    }
                   >
                     <option value="">All Fractiles</option>
                     {(allFractiles || []).map((fractile) => (
@@ -394,7 +428,9 @@ export const ReportsModal = ({
                   <Label>Fractile</Label>
                   <Select
                     value={reportFilters.fractileId}
-                    onChange={(e) => handleFilterChange("fractileId", e.target.value)}
+                    onChange={(e) =>
+                      handleFilterChange("fractileId", e.target.value)
+                    }
                   >
                     <option value="">All Fractiles</option>
                     {(allFractiles || []).map((fractile) => (
@@ -409,7 +445,9 @@ export const ReportsModal = ({
                   <Label>Cell</Label>
                   <Select
                     value={reportFilters.cellId}
-                    onChange={(e) => handleFilterChange("cellId", e.target.value)}
+                    onChange={(e) =>
+                      handleFilterChange("cellId", e.target.value)
+                    }
                   >
                     <option value="">All Cells</option>
                     {filteredCells.map((cell) => (
@@ -428,7 +466,9 @@ export const ReportsModal = ({
                   <Label>Fractile</Label>
                   <Select
                     value={reportFilters.fractileId}
-                    onChange={(e) => handleFilterChange("fractileId", e.target.value)}
+                    onChange={(e) =>
+                      handleFilterChange("fractileId", e.target.value)
+                    }
                   >
                     <option value="">All Fractiles</option>
                     {(allFractiles || []).map((fractile) => (
@@ -443,7 +483,9 @@ export const ReportsModal = ({
                   <Label>Cell</Label>
                   <Select
                     value={reportFilters.cellId}
-                    onChange={(e) => handleFilterChange("cellId", e.target.value)}
+                    onChange={(e) =>
+                      handleFilterChange("cellId", e.target.value)
+                    }
                   >
                     <option value="">All Cells</option>
                     {filteredCells.map((cell) => (
@@ -458,7 +500,9 @@ export const ReportsModal = ({
                   <Label>Tier</Label>
                   <Select
                     value={reportFilters.tierId}
-                    onChange={(e) => handleFilterChange("tierId", e.target.value)}
+                    onChange={(e) =>
+                      handleFilterChange("tierId", e.target.value)
+                    }
                   >
                     <option value="">All Tiers</option>
                     {filteredTiers.map((tier) => (
@@ -500,7 +544,9 @@ export const ReportsModal = ({
                 <Label>Product</Label>
                 <Select
                   value={reportFilters.productId}
-                  onChange={(e) => handleFilterChange("productId", e.target.value)}
+                  onChange={(e) =>
+                    handleFilterChange("productId", e.target.value)
+                  }
                 >
                   <option value="">All Products</option>
                   {(products || []).map((product) => (
@@ -530,11 +576,15 @@ export const ReportsModal = ({
                 <Label>Time Slot</Label>
                 <Select
                   value={reportFilters.timeSlot}
-                  onChange={(e) => handleFilterChange("timeSlot", e.target.value)}
+                  onChange={(e) =>
+                    handleFilterChange("timeSlot", e.target.value)
+                  }
                   disabled={!reportFilters.shift}
                 >
                   <option value="">
-                    {reportFilters.shift ? "All Time Slots" : "Select Shift First"}
+                    {reportFilters.shift
+                      ? "All Time Slots"
+                      : "Select Shift First"}
                   </option>
                   {timeSlotOptions.map((slot) => (
                     <option key={slot.value} value={slot.value}>
